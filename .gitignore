@@ -1,0 +1,38 @@
+# Build results
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider
+.idea/
+
+# OS junk
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# VSCode settings
+.vscode/
+
+# ReSharper
+_ReSharper*/
+*.DotSettings.user
+
+# Logs and dumps
+*.log
+*.dmp
+
+# Others
+*.cache
+*.pdb
+*.db
+*.opendb
+
+# Publish folder if exists
+publish/

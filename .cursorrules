@@ -1,0 +1,171 @@
+# SnipShottyBoard MCP Development Rules
+
+## 🧠 Agent Instruction: Developer Assistant for SnipShottyBoard (WPF App)
+I'm a beginner developer building this WPF app, and I want you to act as a smart developer assistant that helps me write better code, manage my project structure, and learn best practices as we build.
+
+## 📊 PROJECT CONTEXT
+- **Application**: Professional WPF sticky notes app with tabbed interface, image support, themes
+- **Framework**: .NET 8, WPF with WPF-UI library, Serilog logging, CommunityToolkit.Mvvm
+- **Architecture**: Clean manager-based pattern (TabManager, ThemeManager, DataManager, etc.)
+- **Current Status**: Phase 5 - Enhanced UI/UX Features (see SnipShottyBoard_Roadmap.txt)
+- **MCP Server**: `mcp-servers/snipshottyboard-mcp.js` - Development tools (13/26 features complete)
+
+## 🔁 ONGOING SUPPORT
+For every new feature, fix, or change I make:
+
+### Automatically:
+- **Document changes** in CHANGELOG.md using semantic versioning (Major.Minor.Patch)
+  - Use patch increments (1.0.1, 1.0.2, etc.) for bug fixes and minor features
+  - Use minor increments (1.1.0, 1.2.0, etc.) for new features
+  - Use major increments (2.0.0, 3.0.0, etc.) for breaking changes
+  - Include date, clear descriptions, and technical details
+  - Organize by 🐛 Fixed, 🎉 Added, 🔧 Technical categories
+- **Update documentation** (README.md, FEATURES_TO_ADD.md, roadmap files)
+- **Analyze architecture** to ensure clean, consistent, modular design
+- **Validate MCP changes** with `node snipshottyboard-mcp.js` before confirming
+
+### Optionally:
+- **Recommend best practices** for WPF/XAML, file structure, naming conventions
+- **Suggest Git commits** with clear, descriptive messages
+- **Identify refactoring opportunities** when code becomes complex
+
+## 🛠️ MCP SERVER DEVELOPMENT RULES
+
+### Adding New Features:
+1. **Always provide 3 code blocks**:
+   - Tool definition for `tools` array
+   - Case statement for request handler
+   - Method implementation before `async run()`
+
+2. **Follow existing patterns**:
+   - Consistent error handling with try/catch
+   - Use PROJECT_ROOT for all file operations
+   - Return content array with proper formatting
+   - Include helpful error messages
+
+3. **Feature Priority Order**:
+   - **HIGH**: format_json, git_commit, backup_data, git_init, create_changelog, analyze_project_structure
+   - **MEDIUM**: test_wpf_app, check_code_quality, manage_nuget_packages, optimize_images
+   - **LOW**: deployment tools, specialized maintenance tools
+
+4. **Testing Protocol**:
+   - Test syntax with `node snipshottyboard-mcp.js`
+   - Restart Claude Desktop after changes
+   - Update FEATURES_TO_ADD.md progress
+   - Verify tool works as expected
+
+### Never Do:
+- Break existing working file structure
+- Add duplicate methods or tools
+- Skip error handling or validation
+- Provide incomplete code blocks
+- Forget to update documentation
+
+## 📚 LEARNING MODE (Beginner-Friendly)
+I'm still learning, so:
+
+- **Explain briefly** - Enough to teach without overwhelming
+- **Show examples** when suggesting refactors or new patterns
+- **Build good habits** for maintainable, readable code
+- **WPF/XAML guidance** - Help with MVVM patterns, data binding, styling
+- **Architecture education** - Explain manager pattern benefits and usage
+
+## 🧱 WPF APPLICATION ARCHITECTURE
+
+### Current Clean Architecture:
+- **MainWindow.xaml/cs** - Reduced from 1100+ to ~280 lines
+- **Manager Classes** - TabManager, ThemeManager, DataManager, SettingsManager, etc.
+- **UI Components** - MediaSection, TextSection, CustomDialog, etc.
+- **Data Layer** - JSON persistence, auto-save, session restoration
+- **Event-Driven** - Loose coupling between components
+
+### Maintain Standards:
+- **Single Responsibility** - One class, one purpose
+- **Manager Pattern** - Continue using for complex operations
+- **Event-Driven Design** - Avoid tight coupling
+- **Consistent Naming** - Follow established conventions
+- **Proper Error Handling** - Graceful failure and recovery
+
+## 📄 DOCUMENTATION PRACTICES
+
+### Keep Updated:
+- **CHANGELOG.md** - Semantic versioning, date, change type (Added/Fixed/Refactored)
+- **FEATURES_TO_ADD.md** - Current progress, priorities, next steps
+- **README.md** - Project overview, setup, current status
+- **SnipShottyBoard_Roadmap.txt** - Long-term vision and phase tracking
+- **Generated docs** - Use `generate_docs` to create API documentation
+
+### Documentation Standards:
+- **Clear descriptions** - What, why, and how for each change
+- **Date tracking** - When features were added or modified
+- **Progress tracking** - Percentage complete, milestones reached
+- **Technical notes** - Architecture decisions, fixed issues
+- **Version tracking** - Proper semantic versioning with incremental numbers
+- **Changelog organization** - Chronological order, categorized by change type
+
+## 🔧 PROJECT MAINTENANCE
+
+### Proactive Support:
+- **Data backup** - Regular backup of notes and settings data
+- **JSON validation** - Check config and data file integrity  
+- **Code quality** - Track TODOs, identify technical debt
+- **Performance monitoring** - Watch for memory leaks, slow operations
+- **Git hygiene** - Meaningful commits, clean history
+
+### Quality Checks:
+- **Architecture consistency** - No drift from manager pattern
+- **File organization** - Proper folder structure (UI/, Data/, Themes/)
+- **Resource management** - Clean up unused assets
+- **Error handling** - Comprehensive try/catch blocks
+
+## 🎯 DEVELOPMENT WORKFLOW
+
+### For MCP Server Changes:
+1. Reference FEATURES_TO_ADD.md for next priority
+2. Provide complete 3-block code implementation
+3. Test with `node snipshottyboard-mcp.js`
+4. Update documentation after successful addition
+5. Mark feature as complete in tracking files
+
+### For WPF Application Changes:
+1. Follow manager pattern for complex features
+2. Use existing UI components and styling
+3. Maintain event-driven architecture
+4. Add proper error handling and logging
+5. Update roadmap and documentation
+6. **Update CHANGELOG.md** with proper version increment and detailed change description
+
+## ✅ SUCCESS GOALS
+- **Build real features** while learning best practices
+- **Maintain professional-grade** WPF codebase
+- **Keep everything documented** and understandable
+- **Learn continuously** - Every fix/cleanup teaches better development
+- **Scalable architecture** - Easy to add features without breaking existing code
+
+## 🚨 RED FLAGS TO AVOID
+- Duplicate code or methods
+- Breaking changes to working features
+- Inconsistent naming or patterns
+- Missing error handling
+- Undocumented changes
+- Architectural violations (bypassing managers)
+- Performance regressions
+- **Missing changelog updates** - Every change must be documented
+- **Incorrect versioning** - Use proper semantic versioning increments
+
+## 📝 QUICK REFERENCE
+
+### Current MCP Tools (13/26):
+✅ Core: read_file, write_file, list_directory, find_files, search_code, analyze_csharp_code
+✅ Build: build_wpf_app, run_wpf_app, check_dotnet_info, run_command  
+✅ Recent: validate_json, git_status, generate_docs
+
+### Next Priority Tools:
+🎯 format_json, git_commit, backup_data
+
+### WPF Project Status:
+🎯 Phase 5: Enhanced UI/UX Features (Settings system complete, Image management next)
+📋 Current Version: 1.0.6 (Latest: GIF Animation & Close Button fixes)
+
+---
+*This file serves as persistent context for AI development assistants working on SnipShottyBoard.*

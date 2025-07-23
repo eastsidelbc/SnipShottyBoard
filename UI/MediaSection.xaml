@@ -1,0 +1,45 @@
+<UserControl x:Class="SnipShottyBoard.UI.MediaSection"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             Background="Transparent"
+             VerticalAlignment="Stretch"
+             HorizontalAlignment="Stretch"
+             AllowDrop="True"
+             Drop="MediaSection_Drop"
+             DragEnter="MediaSection_DragEnter"
+             DragOver="MediaSection_DragOver"
+             DragLeave="MediaSection_DragLeave">
+    
+    <!-- 🎨 Media Section with drop target styling -->
+    <Grid Background="Transparent" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+        
+        <!-- 📦 Drag Canvas for visual feedback -->
+        <Canvas x:Name="DragCanvas" IsHitTestVisible="False" />
+        
+        <!-- 📋 Drop indicator overlay -->
+        <Border x:Name="DropIndicator" 
+                Background="#1A4CAF50" 
+                BorderBrush="#4CAF50" 
+                BorderThickness="2" 
+                CornerRadius="8"
+                Visibility="Collapsed">
+            <TextBlock Text="📁 Drop images here" 
+                      FontSize="16" 
+                      Foreground="#4CAF50" 
+                      HorizontalAlignment="Center" 
+                      VerticalAlignment="Center" />
+        </Border>
+        
+        <!-- 🖼️ Images container with scroll support -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto" 
+                      HorizontalScrollBarVisibility="Disabled"
+                      AllowDrop="True">
+            <WrapPanel x:Name="MyImagePanel" 
+                       Orientation="Horizontal" 
+                       AllowDrop="True"
+                       Background="Transparent" />
+        </ScrollViewer>
+        
+    </Grid>
+</UserControl> 
