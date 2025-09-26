@@ -51,6 +51,17 @@ namespace SnipShottyBoard.Data
         // this property would contain exactly that text with the line breaks.
         public string TextContent { get; set; } = string.Empty;
 
+        // 📄 Rich Text Content - RTF formatted text with styling
+        // 
+        // This contains the rich text formatting (bold, italic, underline, etc.)
+        // stored in RTF (Rich Text Format) format. This allows for:
+        // - Bold, italic, underline, strikethrough formatting
+        // - Bullet points and indentation
+        // - Preserved formatting when saving/loading
+        // 
+        // If this is empty, the app falls back to TextContent for plain text.
+        public string RichTextContent { get; set; } = string.Empty;
+
         // 🖼️ Image References - List of images you pasted into this note
         // 
         // This list contains the file paths to any images you've pasted into this note.

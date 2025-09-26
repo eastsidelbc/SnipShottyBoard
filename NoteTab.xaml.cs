@@ -13,7 +13,7 @@ namespace SnipShottyBoard
     public partial class NoteTab : UserControl
     {
         // ✅ Expose child components for external access
-        public TextBox TextBox => TextSectionControl.TextBox;
+        public RichTextBox RichTextBox => TextSectionControl.RichTextBox;
         public WrapPanel ImagePanel => MediaSectionControl.ImagePanel;
 
         // 💾 Properties for save/load functionality
@@ -29,11 +29,18 @@ namespace SnipShottyBoard
             } 
         }
 
-        // 📝 Delegate text content to TextSection
+        // 📝 Delegate text content to TextSection (plain text)
         public string TextContent 
         { 
             get => TextSectionControl.TextContent; 
             set => TextSectionControl.TextContent = value;
+        }
+
+        // 📝 Delegate rich text content to TextSection (RTF)
+        public string RichTextContent
+        {
+            get => TextSectionControl.RichTextContent;
+            set => TextSectionControl.RichTextContent = value;
         }
 
         // 🖼️ Delegate image files to MediaSection

@@ -1,8 +1,9 @@
 # SnipShottyBoard MCP Server - Features Roadmap
 
-**Last Updated:** July 16, 2025  
+**Last Updated:** December 23, 2024  
 **Project:** SnipShottyBoard WPF Sticky Notes Application  
 **MCP Server Version:** 1.0.1  
+**WPF App Version:** 1.1.0 (Rich Text Editing Complete!)  
 
 ---
 

@@ -322,6 +322,12 @@ namespace SnipShottyBoard
                     tabManager.SelectedTab.Content.AddImage(imgControl, imagePath);
                 }
             };
+            keyboardHandler.OnRichTextFormattingRequested += (formatType) => {
+                if (tabManager.SelectedTab?.Content?.RichTextBox != null)
+                {
+                    ApplyRichTextFormatting(tabManager.SelectedTab.Content.RichTextBox, formatType);
+                }
+            };
 
             // SettingsManager events
             settingsManager.OnLogDebug += (message) => loggingService.LogDebug(message);
@@ -350,6 +356,62 @@ namespace SnipShottyBoard
             };
 
             loggingService.LogDebug("✅ Event handlers wired");
+        }
+        #endregion
+
+        #region Rich Text Formatting
+        private void ApplyRichTextFormatting(RichTextBox richTextBox, string formatType)
+        {
+            try
+            {
+                // Get the TextSection from the RichTextBox's parent
+                var textSection = FindVisualParent<TextSection>(richTextBox);
+                if (textSection == null) return;
+
+                switch (formatType.ToLower())
+                {
+                    case "bold":
+                        textSection.ApplyBold();
+                        break;
+                    case "italic":
+                        textSection.ApplyItalic();
+                        break;
+                    case "underline":
+                        textSection.ApplyUnderline();
+                        break;
+                    case "strikethrough":
+                        textSection.ApplyStrikethrough();
+                        break;
+                    case "bullet":
+                        textSection.ApplyBulletList();
+                        break;
+                    case "numbered":
+                        textSection.ApplyNumberedList();
+                        break;
+                    case "indent":
+                        textSection.IndentText();
+                        break;
+                    case "unindent":
+                        textSection.UnindentText();
+                        break;
+                }
+
+                // Trigger data change for auto-save
+                hasUnsavedChanges = true;
+            }
+            catch (Exception ex)
+            {
+                loggingService?.LogError($"Error applying rich text formatting: {formatType}", ex);
+            }
+        }
+
+        private T FindVisualParent<T>(DependencyObject child) where T : DependencyObject
+        {
+            var parentObject = VisualTreeHelper.GetParent(child);
+            if (parentObject == null) return null;
+
+            if (parentObject is T parent) return parent;
+            return FindVisualParent<T>(parentObject);
         }
         #endregion
 

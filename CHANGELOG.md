@@ -5,7 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2024-12-23
+### 🎉 Added
+- **Rich Text Editing**: Converted TextBox to RichTextBox with comprehensive formatting support
+- **Keyboard Shortcuts**: Added rich text formatting shortcuts (Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+S, Ctrl+., Ctrl+L, Tab, Shift+Tab)
+- **Formatting Features**: Bold, italic, underline, strikethrough, bullet points, numbered lists, and text indentation
+- **RTF Storage**: Rich text content is now stored in RTF format for preserved formatting
+- **Backward Compatibility**: Existing plain text notes are automatically converted and preserved
+
+### 🐛 Fixed
+- **Bullet Points**: Fixed bullet points implementation to actually add bullet characters (•) instead of just indentation
+- **Numbered Lists**: Added proper numbered list support with automatic numbering (1., 2., 3., etc.)
+
+### 🔧 Technical
+- Replaced TextBox with RichTextBox in TextSection.xaml while maintaining identical styling
+- Added RTF content storage in SavedNote.RichTextContent property
+- Implemented rich text formatting methods in TextSection.xaml.cs with proper bullet (•) and numbered list (1., 2., 3.) characters
+- Enhanced KeyboardHandler.cs with rich text formatting shortcuts including Ctrl+L for numbered lists
+- Updated TabManager.cs to handle RTF content loading and saving
+- Added rich text formatting event handling in MainWindow.xaml.cs
+- Maintained all existing functionality including autosave, placeholder text, and scrolling
 
 ## [1.0.6] - 2024-12-23
 ### 🐛 Fixed

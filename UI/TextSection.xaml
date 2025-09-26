@@ -26,23 +26,30 @@
                       VerticalAlignment="Top"
                       IsHitTestVisible="False"
                       Visibility="Visible" />
-            <TextBox x:Name="NoteTextBox"
-                     Background="Transparent"
-                     Foreground="{DynamicResource AppForegroundBrush}"
-                     CaretBrush="{DynamicResource AppForegroundBrush}"
-                     BorderThickness="0"
-                     AcceptsReturn="True"
-                     TextWrapping="Wrap"
-                     VerticalScrollBarVisibility="Auto"
-                     HorizontalScrollBarVisibility="Disabled"
-                     VerticalAlignment="Stretch"
-                     HorizontalAlignment="Stretch"
-                     FontSize="14"
-                     FontFamily="Segoe UI"
-                     Padding="8"
-                     ScrollViewer.CanContentScroll="True"
-                     ScrollViewer.VerticalScrollBarVisibility="Auto"
-                     TextChanged="NoteTextBox_TextChanged" />
+            <RichTextBox x:Name="NoteRichTextBox"
+                        Background="Transparent"
+                        Foreground="{DynamicResource AppForegroundBrush}"
+                        CaretBrush="{DynamicResource AppForegroundBrush}"
+                        BorderThickness="0"
+                        AcceptsReturn="True"
+                        VerticalScrollBarVisibility="Auto"
+                        HorizontalScrollBarVisibility="Disabled"
+                        VerticalAlignment="Stretch"
+                        HorizontalAlignment="Stretch"
+                        FontSize="14"
+                        FontFamily="Segoe UI"
+                        Padding="8"
+                        ScrollViewer.CanContentScroll="True"
+                        ScrollViewer.VerticalScrollBarVisibility="Auto"
+                        TextChanged="NoteRichTextBox_TextChanged">
+                <RichTextBox.Resources>
+                    <!-- 🎨 Default paragraph style to match TextBox appearance -->
+                    <Style TargetType="Paragraph">
+                        <Setter Property="Margin" Value="0"/>
+                        <Setter Property="LineHeight" Value="1.2"/>
+                    </Style>
+                </RichTextBox.Resources>
+            </RichTextBox>
         </Grid>
     </Border>
 </UserControl> 

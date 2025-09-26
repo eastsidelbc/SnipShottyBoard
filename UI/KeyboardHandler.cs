@@ -18,6 +18,7 @@ namespace SnipShottyBoard.UI
         public event Action OnRenameTabRequested;
         public event Action OnSwitchTabRequested;
         public event Action<Image, string> OnImagePasted;
+        public event Action<string> OnRichTextFormattingRequested; // New event for rich text formatting
 
         public KeyboardHandler()
         {
@@ -69,6 +70,72 @@ namespace SnipShottyBoard.UI
                         }
                         // Otherwise, let standard text paste work normally
                         break;
+
+                    // 🎨 Rich text formatting shortcuts (only when in RichTextBox)
+                    case Key.B: // Ctrl+B: Bold
+                        if (focusedElement is RichTextBox)
+                        {
+                            OnRichTextFormattingRequested?.Invoke("bold");
+                            e.Handled = true;
+                        }
+                        break;
+
+                    case Key.I: // Ctrl+I: Italic
+                        if (focusedElement is RichTextBox)
+                        {
+                            OnRichTextFormattingRequested?.Invoke("italic");
+                            e.Handled = true;
+                        }
+                        break;
+
+                    case Key.U: // Ctrl+U: Underline
+                        if (focusedElement is RichTextBox)
+                        {
+                            OnRichTextFormattingRequested?.Invoke("underline");
+                            e.Handled = true;
+                        }
+                        break;
+
+                    case Key.S: // Ctrl+S: Strikethrough
+                        if (focusedElement is RichTextBox)
+                        {
+                            OnRichTextFormattingRequested?.Invoke("strikethrough");
+                            e.Handled = true;
+                        }
+                        break;
+
+                    case Key.OemPeriod: // Ctrl+.: Bullet list
+                        if (focusedElement is RichTextBox)
+                        {
+                            OnRichTextFormattingRequested?.Invoke("bullet");
+                            e.Handled = true;
+                        }
+                        break;
+
+                    case Key.L: // Ctrl+L: Numbered list
+                        if (focusedElement is RichTextBox)
+                        {
+                            OnRichTextFormattingRequested?.Invoke("numbered");
+                            e.Handled = true;
+                        }
+                        break;
+                }
+            }
+            else if (e.Key == Key.Tab)
+            {
+                // Tab/Shift+Tab: Indent/Unindent (only in RichTextBox)
+                var focusedElement = Keyboard.FocusedElement;
+                if (focusedElement is RichTextBox)
+                {
+                    if (Keyboard.Modifiers == ModifierKeys.Shift)
+                    {
+                        OnRichTextFormattingRequested?.Invoke("unindent");
+                    }
+                    else
+                    {
+                        OnRichTextFormattingRequested?.Invoke("indent");
+                    }
+                    e.Handled = true;
                 }
             }
         }

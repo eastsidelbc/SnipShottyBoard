@@ -782,7 +782,17 @@ namespace SnipShottyBoard.UI
                     {
                         var noteTab = new NoteTab();
                         noteTab.Title = savedNote.Title;
-                        noteTab.TextContent = savedNote.TextContent;
+                        
+                        // Load rich text content if available, otherwise fall back to plain text
+                        if (!string.IsNullOrEmpty(savedNote.RichTextContent))
+                        {
+                            noteTab.RichTextContent = savedNote.RichTextContent;
+                        }
+                        else
+                        {
+                            noteTab.TextContent = savedNote.TextContent;
+                        }
+                        
                         noteTab.ImageFiles = savedNote.ImageFiles ?? new List<string>();
                         noteTab.ImageTimestamps = savedNote.ImageTimestamps ?? new Dictionary<string, DateTime>();
 
@@ -832,6 +842,7 @@ namespace SnipShottyBoard.UI
             {
                 Title = tab.Title,
                 TextContent = tab.Content.TextContent,
+                RichTextContent = tab.Content.RichTextContent,
                 ImageFiles = tab.Content.ImageFiles,
                 ImageTimestamps = tab.Content.ImageTimestamps
             }).ToList();
