@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-01-01
+### 🎨 Tab Drag-and-Drop UX Enhancement
+- **Drop Indicator**: Added blue vertical line (3px wide) that shows exactly where tabs will be inserted during drag operations
+- **Drag Visual**: Implemented semi-transparent gray ghost tab that follows cursor during drag (changed from blue to gray for better contrast with drop indicator)
+- **Edge-like Styling**: Redesigned tabs with Microsoft Edge-inspired appearance
+  - Rounded top corners (3px radius)
+  - Blue accent underline (2px) on active tabs
+  - Medium font weight for selected tabs
+  - Smooth hover and pressed state animations
+- **Hysteresis System**: Added 5px buffer to prevent indicator flicker when hovering near tab boundaries
+- **Improved Drop Detection**: Enhanced FindDropTargetIndex to use tab midpoints for intuitive drop zones
+- **Visual Transparency**: Drag visual uses more transparent gray (alpha 140 from 200) to show background content
+
+### 🐛 Fixed
+- **Coordinate Transform Bug**: Fixed "Visual is not an ancestor" exception by using MainWindow as common ancestor for both dragCanvas and tab buttons
+- **Drop Position Detection**: Fixed drop indicator only appearing at end - now correctly shows between all tabs
+- **Build Error**: Removed empty GifFramePlayer.xaml and GifFramePlayer.cs files that were causing XML parse errors
+- **Visual Conflict**: Changed drag visual from blue to gray to prevent hiding the blue drop indicator line
+
+### 🔧 Technical
+- **Coordinate Transformations**: Implemented proper WPF coordinate transforms using TransformToAncestor(MainWindow)
+- **Tag-Based Selection**: Active tab styling now uses Tag="Selected" property to drive XAML triggers (cleaner than code-behind)
+- **Theme Resources**: Added AccentBrush (#4A90E2) to both DarkTheme.xaml and LightTheme.xaml
+- **Drag Canvas**: Full-window overlay canvas with ZIndex=9999 contains both drag visual and drop indicator
+- **Index Calculation**: ReorderTab properly handles forward vs backward movement with insert index adjustment
+- **Debug Logging**: Comprehensive OnLogDebug calls throughout drag system (start, move, drop, coordinates, indices)
+
+### 📊 Performance
+- Drag visual updates only on mouse move (not continuous)
+- Coordinate transforms cached per frame (not per tab)
+- Hysteresis reduces unnecessary indicator position updates
+- Visual tree changes batched (remove then insert, not swap)
+
+### 📚 Documentation
+- **CR.md Section 1.5**: Added comprehensive "Tab Drag-and-Drop System" documentation
+  - Drag flow diagrams and code examples
+  - Coordinate transformation logic explanation
+  - Hysteresis implementation details
+  - ReorderTab index calculation (forward/backward cases)
+  - Visual tree structure
+  - Edge cases and performance considerations
+
+### 🎯 Visual Tree Changes
+```
+MainWindow
+└── Grid
+    ├── ScrollViewer (tab strip)
+    │   └── StackPanel (tabs)
+    └── Canvas (ZIndex=9999, drag overlay)
+        ├── Border (gray ghost tab, alpha 140)
+        └── Border (blue drop indicator, 3px wide)
+```
+
 ## [1.2.1] - 2024-12-28
 ### 🔧 Post-Audit Hardening & Consistency
 - **Nullable Warnings Reduction**: Reduced from 274 to 246 nullable warnings by fixing critical Manager and Data layer issues

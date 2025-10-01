@@ -189,8 +189,8 @@ namespace SnipShottyBoard.UI
                 // 📏 Create a visual copy of the tab button with neutral color so blue drop indicator is visible
                 var visualCopy = new Border
                 {
-                    Background = new SolidColorBrush(Color.FromArgb(200, 128, 128, 128)), // Semi-transparent gray
-                    BorderBrush = new SolidColorBrush(Color.FromArgb(180, 96, 96, 96)),   // Darker gray border
+                    Background = new SolidColorBrush(Color.FromArgb(140, 128, 128, 128)), // More transparent gray (was 200)
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(120, 96, 96, 96)),   // More transparent border (was 180)
                     BorderThickness = new Thickness(2, 2, 2, 2),
                     CornerRadius = new CornerRadius(3, 3, 0, 0), // Match Edge-like rounded top corners
                     Width = sourceButton.ActualWidth,
