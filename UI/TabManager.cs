@@ -227,7 +227,7 @@ namespace SnipShottyBoard.UI
             }
         }
 
-        // 📍 Update drop indicator position and visibility
+        // 📍 Update drop indicator position and visibility (row-aware for multi-row layout)
         private void UpdateDropIndicator(int targetIndex)
         {
             if (dropIndicator == null || tabHeaderPanel == null) 
@@ -254,6 +254,8 @@ namespace SnipShottyBoard.UI
                 
                 // Calculate position for drop indicator
                 double indicatorX = 0;
+                double indicatorY = 0;
+                Button referenceTab = null;
                 
                 if (targetIndex >= tabHeaderPanel.Children.Count)
                 {
@@ -263,11 +265,13 @@ namespace SnipShottyBoard.UI
                         var lastTab = tabHeaderPanel.Children[tabHeaderPanel.Children.Count - 1] as Button;
                         if (lastTab != null && Application.Current.MainWindow != null)
                         {
+                            referenceTab = lastTab;
                             // Transform from tab to main window, then to drag canvas
                             var lastTabPosInWindow = lastTab.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
                             var canvasPosInWindow = dragCanvas.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
                             indicatorX = lastTabPosInWindow.X - canvasPosInWindow.X + lastTab.ActualWidth + 2;
-                            OnLogDebug?.Invoke($"📍 Positioning at end: X={indicatorX}", string.Empty);
+                            indicatorY = lastTabPosInWindow.Y - canvasPosInWindow.Y + 1;
+                            OnLogDebug?.Invoke($"📍 Positioning at end: X={indicatorX}, Y={indicatorY}", string.Empty);
                         }
                     }
                 }
@@ -277,31 +281,25 @@ namespace SnipShottyBoard.UI
                     var targetTab = tabHeaderPanel.Children[targetIndex] as Button;
                     if (targetTab != null && Application.Current.MainWindow != null)
                     {
+                        referenceTab = targetTab;
                         // Transform from tab to main window, then to drag canvas
                         var targetTabPosInWindow = targetTab.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
                         var canvasPosInWindow = dragCanvas.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
                         indicatorX = targetTabPosInWindow.X - canvasPosInWindow.X - 2;
-                        OnLogDebug?.Invoke($"📍 Positioning before tab {targetIndex}: X={indicatorX}", string.Empty);
+                        indicatorY = targetTabPosInWindow.Y - canvasPosInWindow.Y + 1;
+                        OnLogDebug?.Invoke($"📍 Positioning before tab {targetIndex}: X={indicatorX}, Y={indicatorY}", string.Empty);
                     }
                 }
                 
                 // Position the drop indicator
                 Canvas.SetLeft(dropIndicator, indicatorX);
+                Canvas.SetTop(dropIndicator, indicatorY);
                 
-                // Position vertically aligned with tabs
-                if (tabHeaderPanel.Children.Count > 0)
+                // Set height based on reference tab
+                if (referenceTab != null)
                 {
-                    var firstTab = tabHeaderPanel.Children[0] as Button;
-                    if (firstTab != null && Application.Current.MainWindow != null)
-                    {
-                        // Transform from tab to main window, then to drag canvas  
-                        var tabPosInWindow = firstTab.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
-                        var canvasPosInWindow = dragCanvas.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
-                        var indicatorY = tabPosInWindow.Y - canvasPosInWindow.Y + 1;
-                        Canvas.SetTop(dropIndicator, indicatorY);
-                        dropIndicator.Height = firstTab.ActualHeight - 2;
-                        OnLogDebug?.Invoke($"📍 Final position: X={indicatorX}, Y={indicatorY}, Height={dropIndicator.Height}", string.Empty);
-                    }
+                    dropIndicator.Height = referenceTab.ActualHeight - 2;
+                    OnLogDebug?.Invoke($"📍 Final position: X={indicatorX}, Y={indicatorY}, Height={dropIndicator.Height}", string.Empty);
                 }
             }
             catch (Exception ex)
@@ -311,61 +309,91 @@ namespace SnipShottyBoard.UI
             }
         }
 
-        // 🎯 Find drop target index based on mouse position
+        // 🎯 Find drop target index based on mouse position (row-aware for multi-row layout)
         private int FindDropTargetIndex(Point mousePosition)
         {
             try
             {
                 OnLogDebug?.Invoke($"🎯 FindDropTargetIndex called with mousePosition: {mousePosition}", string.Empty);
                 
-                // Use the mouse position directly - it's already relative to tabHeaderPanel
                 double mouseX = mousePosition.X;
-                OnLogDebug?.Invoke($"🎯 Mouse X position: {mouseX}", string.Empty);
+                double mouseY = mousePosition.Y;
+                OnLogDebug?.Invoke($"🎯 Mouse position: X={mouseX:F1}, Y={mouseY:F1}", string.Empty);
                 
-                // 🔍 Find which tab position we're over
+                if (tabHeaderPanel.Children.Count == 0)
+                {
+                    return 0;
+                }
+                
+                // 📊 Group tabs by row (based on Y position with 5px tolerance)
+                var tabPositions = new List<(int index, Button button, Point position, double rowY)>();
+                
                 for (int i = 0; i < tabHeaderPanel.Children.Count; i++)
                 {
                     if (tabHeaderPanel.Children[i] is Button tabButton)
                     {
-                        // Get tab's position relative to tabHeaderPanel
-                        var tabPosition = tabButton.TransformToAncestor(tabHeaderPanel)
-                            .Transform(new Point(0, 0));
-                        
-                        double tabStartX = tabPosition.X;
-                        double tabMidX = tabPosition.X + tabButton.ActualWidth / 2;
-                        double tabEndX = tabPosition.X + tabButton.ActualWidth;
-                        
-                        OnLogDebug?.Invoke($"🎯 Tab {i}: StartX={tabStartX:F1}, MidX={tabMidX:F1}, EndX={tabEndX:F1}", string.Empty);
-                        
-                        // If mouse is before the midpoint of this tab, insert before it
-                        // Add hysteresis: require at least 5px movement to change drop target
-                        double hysteresisBuffer = 5.0;
-                        bool shouldInsertHere = false;
-                        
-                        if (lastDropTargetIndex == i && mouseX < tabMidX + hysteresisBuffer)
-                        {
-                            // Stick to current target if we're within hysteresis buffer
-                            shouldInsertHere = true;
-                        }
-                        else if (lastDropTargetIndex != i && mouseX < tabMidX - hysteresisBuffer)
-                        {
-                            // Switch to new target only if we're outside hysteresis buffer
-                            shouldInsertHere = true;
-                        }
-                        
-                        if (shouldInsertHere)
-                        {
-                            OnLogDebug?.Invoke($"🎯 Mouse before tab {i} midpoint - returning index {i}", string.Empty);
-                            lastDropTargetIndex = i;
-                            return i;
-                        }
+                        var tabPosition = tabButton.TransformToAncestor(tabHeaderPanel).Transform(new Point(0, 0));
+                        double rowY = Math.Round(tabPosition.Y / AppConstants.TabRowGroupingTolerance) * AppConstants.TabRowGroupingTolerance;
+                        tabPositions.Add((i, tabButton, tabPosition, rowY));
+                        OnLogDebug?.Invoke($"🎯 Tab {i}: X={tabPosition.X:F1}, Y={tabPosition.Y:F1}, RowY={rowY:F1}", string.Empty);
                     }
                 }
                 
-                // 📍 If past all tabs, drop at end
-                OnLogDebug?.Invoke($"🎯 Mouse past all tabs - returning end index {tabHeaderPanel.Children.Count}", string.Empty);
-                lastDropTargetIndex = tabHeaderPanel.Children.Count;
-                return tabHeaderPanel.Children.Count;
+                // 🔍 Find which row the mouse is over
+                var rows = tabPositions.GroupBy(t => t.rowY).OrderBy(g => g.Key).ToList();
+                OnLogDebug?.Invoke($"🎯 Found {rows.Count} rows", string.Empty);
+                
+                int targetRowIndex = 0;
+                double minYDiff = double.MaxValue;
+                
+                for (int r = 0; r < rows.Count; r++)
+                {
+                    double rowY = rows[r].Key;
+                    double yDiff = Math.Abs(mouseY - rowY);
+                    
+                    if (yDiff < minYDiff)
+                    {
+                        minYDiff = yDiff;
+                        targetRowIndex = r;
+                    }
+                }
+                
+                var targetRow = rows[targetRowIndex].OrderBy(t => t.position.X).ToList();
+                OnLogDebug?.Invoke($"🎯 Target row {targetRowIndex} has {targetRow.Count} tabs", string.Empty);
+                
+                // 🎯 Find position within the target row
+                double hysteresisBuffer = AppConstants.TabDragHysteresisBuffer;
+                
+                for (int i = 0; i < targetRow.Count; i++)
+                {
+                    var tab = targetRow[i];
+                    double tabMidX = tab.position.X + tab.button.ActualWidth / 2;
+                    
+                    bool shouldInsertHere = false;
+                    
+                    if (lastDropTargetIndex == tab.index && mouseX < tabMidX + hysteresisBuffer)
+                    {
+                        shouldInsertHere = true;
+                    }
+                    else if (lastDropTargetIndex != tab.index && mouseX < tabMidX - hysteresisBuffer)
+                    {
+                        shouldInsertHere = true;
+                    }
+                    
+                    if (shouldInsertHere)
+                    {
+                        OnLogDebug?.Invoke($"🎯 Inserting before tab {tab.index} in row {targetRowIndex}", string.Empty);
+                        lastDropTargetIndex = tab.index;
+                        return tab.index;
+                    }
+                }
+                
+                // 📍 Drop at end of target row (or at very end if last row)
+                var lastTabInRow = targetRow[targetRow.Count - 1];
+                int insertIndex = lastTabInRow.index + 1;
+                OnLogDebug?.Invoke($"🎯 Inserting after last tab in row {targetRowIndex}: index {insertIndex}", string.Empty);
+                lastDropTargetIndex = insertIndex;
+                return insertIndex;
             }
             catch (Exception ex)
             {
@@ -937,6 +965,176 @@ namespace SnipShottyBoard.UI
             }
         }
 
+        // 🎯 Navigate tabs using arrow keys (row-aware for multi-row layout)
+        public void NavigateTab(string direction)
+        {
+            try
+            {
+                if (tabs.Count == 0) return;
+
+                var currentIndex = selectedTab != null ? tabs.IndexOf(selectedTab) : -1;
+                if (currentIndex < 0) return;
+
+                OnLogDebug?.Invoke($"🎯 NavigateTab: direction={direction}, currentIndex={currentIndex}", string.Empty);
+
+                // Handle simple Home/End cases
+                if (direction == "Home")
+                {
+                    SelectTab(tabs[0]);
+                    OnLogDebug?.Invoke("🎯 Navigated to first tab (Home)", string.Empty);
+                    return;
+                }
+                else if (direction == "End")
+                {
+                    SelectTab(tabs[tabs.Count - 1]);
+                    OnLogDebug?.Invoke("🎯 Navigated to last tab (End)", string.Empty);
+                    return;
+                }
+
+                // 📊 Build row/column layout for arrow key navigation
+                var tabPositions = new List<(int index, Button button, Point position, double rowY)>();
+                
+                for (int i = 0; i < tabs.Count; i++)
+                {
+                    if (tabs[i].HeaderButton != null && tabHeaderPanel != null)
+                    {
+                        var tabPosition = tabs[i].HeaderButton.TransformToAncestor(tabHeaderPanel).Transform(new Point(0, 0));
+                        double rowY = Math.Round(tabPosition.Y / AppConstants.TabRowGroupingTolerance) * AppConstants.TabRowGroupingTolerance;
+                        tabPositions.Add((i, tabs[i].HeaderButton, tabPosition, rowY));
+                    }
+                }
+
+                // Group into rows
+                var rows = tabPositions.GroupBy(t => t.rowY).OrderBy(g => g.Key).Select(g => g.OrderBy(t => t.position.X).ToList()).ToList();
+                OnLogDebug?.Invoke($"🎯 Found {rows.Count} rows", string.Empty);
+
+                // Find current row and position within row
+                int currentRow = -1;
+                int currentCol = -1;
+
+                for (int r = 0; r < rows.Count; r++)
+                {
+                    for (int c = 0; c < rows[r].Count; c++)
+                    {
+                        if (rows[r][c].index == currentIndex)
+                        {
+                            currentRow = r;
+                            currentCol = c;
+                            break;
+                        }
+                    }
+                    if (currentRow >= 0) break;
+                }
+
+                if (currentRow < 0)
+                {
+                    OnLogDebug?.Invoke("🚫 Current tab not found in layout", string.Empty);
+                    return;
+                }
+
+                OnLogDebug?.Invoke($"🎯 Current position: row {currentRow}, col {currentCol}", string.Empty);
+
+                int targetIndex = currentIndex;
+
+                switch (direction)
+                {
+                    case "Left":
+                        if (currentCol > 0)
+                        {
+                            // Move left within same row
+                            targetIndex = rows[currentRow][currentCol - 1].index;
+                        }
+                        else if (currentRow > 0)
+                        {
+                            // Wrap to end of previous row
+                            targetIndex = rows[currentRow - 1][rows[currentRow - 1].Count - 1].index;
+                        }
+                        else
+                        {
+                            // Wrap to last tab in last row
+                            targetIndex = rows[rows.Count - 1][rows[rows.Count - 1].Count - 1].index;
+                        }
+                        break;
+
+                    case "Right":
+                        if (currentCol < rows[currentRow].Count - 1)
+                        {
+                            // Move right within same row
+                            targetIndex = rows[currentRow][currentCol + 1].index;
+                        }
+                        else if (currentRow < rows.Count - 1)
+                        {
+                            // Wrap to start of next row
+                            targetIndex = rows[currentRow + 1][0].index;
+                        }
+                        else
+                        {
+                            // Wrap to first tab in first row
+                            targetIndex = rows[0][0].index;
+                        }
+                        break;
+
+                    case "Up":
+                        if (currentRow > 0)
+                        {
+                            // Move to tab in row above (closest X position)
+                            var currentX = rows[currentRow][currentCol].position.X;
+                            var targetRow = rows[currentRow - 1];
+                            
+                            // Find closest tab by X position
+                            int closestCol = 0;
+                            double minDist = double.MaxValue;
+                            for (int c = 0; c < targetRow.Count; c++)
+                            {
+                                double dist = Math.Abs(targetRow[c].position.X - currentX);
+                                if (dist < minDist)
+                                {
+                                    minDist = dist;
+                                    closestCol = c;
+                                }
+                            }
+                            targetIndex = targetRow[closestCol].index;
+                        }
+                        // else stay on current tab
+                        break;
+
+                    case "Down":
+                        if (currentRow < rows.Count - 1)
+                        {
+                            // Move to tab in row below (closest X position)
+                            var currentX = rows[currentRow][currentCol].position.X;
+                            var targetRow = rows[currentRow + 1];
+                            
+                            // Find closest tab by X position
+                            int closestCol = 0;
+                            double minDist = double.MaxValue;
+                            for (int c = 0; c < targetRow.Count; c++)
+                            {
+                                double dist = Math.Abs(targetRow[c].position.X - currentX);
+                                if (dist < minDist)
+                                {
+                                    minDist = dist;
+                                    closestCol = c;
+                                }
+                            }
+                            targetIndex = targetRow[closestCol].index;
+                        }
+                        // else stay on current tab
+                        break;
+                }
+
+                if (targetIndex != currentIndex && targetIndex >= 0 && targetIndex < tabs.Count)
+                {
+                    SelectTab(tabs[targetIndex]);
+                    OnLogDebug?.Invoke($"🎯 Navigated to tab {targetIndex} ({direction})", string.Empty);
+                }
+            }
+            catch (Exception ex)
+            {
+                OnLogError?.Invoke($"Error navigating tab ({direction})", ex);
+            }
+        }
+
         // 📖 Load tabs from saved data
         public void LoadTabs(List<SavedNote> savedNotes)
         {
@@ -1046,6 +1244,8 @@ namespace SnipShottyBoard.UI
                 Content = textBlock,
                 Style = (Style)Application.Current.FindResource("TabButtonStyle"),
                 Height = 32,
+                MinWidth = AppConstants.TabMinWidth,
+                MaxWidth = AppConstants.TabMaxWidth,
                 Margin = new Thickness(2, 0, 2, 0)
             };
 

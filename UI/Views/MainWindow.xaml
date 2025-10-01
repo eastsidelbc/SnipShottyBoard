@@ -142,14 +142,15 @@
                 </Grid>
             </Border>
 
-            <!-- 📑 Tab Strip (Below Header) -->
+            <!-- 📑 Tab Strip (Below Header) - Multi-Row Wrapping -->
             <ScrollViewer Grid.Row="1" 
-                          HorizontalScrollBarVisibility="Auto"
-                          VerticalScrollBarVisibility="Hidden"
-                          Background="{DynamicResource TabBackgroundBrush}">
+                          Background="{DynamicResource TabBackgroundBrush}"
+                          MaxHeight="200"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
                 
-                <!-- 🏷️ Custom Tab Header Panel (No Content Area) -->
-                <StackPanel x:Name="TabHeaderPanel"
+                <!-- 🏷️ Custom Tab Header Panel with Multi-Row Wrapping -->
+                <WrapPanel x:Name="TabHeaderPanel"
                            Orientation="Horizontal"
                            Margin="4,2"
                            Background="Transparent" />

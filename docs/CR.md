@@ -54,164 +54,64 @@
 - Cross-manager communication via events only
 - External dependencies (Serilog, WPF-UI) isolated to specific layers
 
-## 1.5) Tab Drag-and-Drop System
+## 1.5) Tabs Pattern
 
-**Overview:**
-The tab drag-and-drop system in `TabManager.cs` provides an intuitive UX for reordering tabs with visual feedback. It consists of three main components: drag visual (ghost tab), drop indicator (blue line), and reorder logic.
+**Normative Requirements:**
 
-**Core Components:**
+The tab system MUST provide Edge-like visual styling and behavior for professional desktop UX.
 
-1. **Drag Canvas**
-   - Full-window overlay canvas (`dragCanvas`) with `ZIndex=9999`
-   - Transparent background, non-hit-testable  
-   - Contains both drag visual and drop indicator
-   - Added to MainWindow's root Grid during initialization
+**Visual Requirements:**
 
-2. **Drag Visual (Ghost Tab)**
-   - Semi-transparent gray Border showing the dragged tab  
-   - Color: `#C8808080` (ARGB) - gray to contrast with blue drop indicator
-   - Follows mouse cursor during drag
-   - Rounded top corners (`3,3,0,0`) matching Edge-like tab style
-   - White text for visibility
+- **Rounded top corners**: Tab buttons MUST have subtle rounded corners (top only)
+- **Accent underline**: Active tab MUST show a colored underline (typically bottom edge)
+- **Hover/pressed states**: Tabs MUST provide clear visual feedback on hover and press
+- **Drag visual (ghost)**: During drag, a semi-transparent visual MUST follow the cursor
+- **Drop indicator**: A vertical line (blue accent) MUST show the insertion point during drag
+- **Theme resources only**: All colors MUST use theme resource brushes (never inline hex codes)
+- **Multi-row wrapping**: When horizontal space is constrained, tabs MUST wrap into multiple rows
+- **No hidden horizontal scrollbar**: Tabs MUST NOT hide behind a horizontal scrollbar
 
-3. **Drop Indicator (Blue Line)**
-   - 3px wide, height matches tab height
-   - Color: `#4A90E2` (blue accent brush)
-   - Shows insertion point between tabs
-   - Updates on mouse move with coordinate transforms
+**Behavioral Guarantees:**
 
-**Drag Flow:**
+- **Row-aware drag & drop**: User can drag tabs between rows; drop indicator positions correctly in target row
+- **Keyboard navigation**: Arrow keys MUST traverse tabs as follows:
+  - **Left/Right**: Sequential navigation, wrapping at row edges
+  - **Up/Down**: Move between rows, maintaining horizontal position when possible
+  - **Home/End**: Jump to absolute first/last tab across all rows
+  - **Context-aware**: Arrow keys navigate tabs only when focus is NOT in text input
+- **Accessible contrast**: Active tab styling MUST provide sufficient contrast in both light/dark themes
 
-```csharp
-// 1. Drag Start (mouse down + movement threshold)
-StartDragOperation(Button tabButton, Point startPoint)
-├── Set isDragging = true
-├── Record draggedTabOriginalIndex
-├── Create gray drag visual
-├── Capture mouse on tab button
-└── Log drag start event
+**Sizing & Layout:**
 
-// 2. Drag Move (mouse move while dragging)
-PreviewMouseMove Handler
-├── Update drag visual position (follows cursor)
-├── Calculate dropTargetIndex via FindDropTargetIndex()
-│   ├── Transform mouse coords to tabHeaderPanel space
-│   ├── Iterate through tabs, check against midpoints
-│   ├── Apply 5px hysteresis buffer (prevent flicker)
-│   └── Return insertion index (0 to N)
-└── Update drop indicator position via UpdateDropIndicator()
+- Tab buttons MUST respect minimum and maximum width constraints (reference `AppConstants.TabMinWidth`, `AppConstants.TabMaxWidth`)
+- Tab strip MUST use vertical scrolling when height exceeds maximum (reference `AppConstants.TabStripMaxHeight`)
+- Row detection MUST group tabs by Y-position tolerance (reference `AppConstants.TabRowGroupingTolerance`)
+- Drag hysteresis MUST prevent flicker near tab boundaries (reference `AppConstants.TabDragHysteresisBuffer`)
 
-// 3. Drag End (mouse up or leave window)
-CompleteDragOperation(bool performReorder)
-├── If performReorder: call ReorderTab()
-│   ├── Calculate correct insert index (forward/backward)
-│   ├── Remove tab from original position
-│   ├── Insert at new position
-│   ├── Update UI collections (tabs[], tabHeaderPanel)
-│   └── Select moved tab
-├── Hide drop indicator
-├── Remove drag visual
-├── Reset drag state
-└── Log completion (from→to indices)
-```
+**Architectural Constraints:**
 
-**Coordinate Transformation Logic:**
+- Drag overlay canvas (`dragCanvas`) with `ZIndex=9999` contains both drag visual and drop indicator
+- Use `WrapPanel` for multi-row layout (not `StackPanel` with horizontal scroll)
+- Coordinate transforms MUST use `MainWindow` as common ancestor when positioning overlay elements
+- Visual tree: `ScrollViewer` (vertical) → `WrapPanel` → tab buttons
 
-The drop indicator positioning uses proper WPF coordinate transforms:
+**Edge Cases:**
 
-```csharp
-// Problem: dragCanvas and tab buttons are in different visual tree branches
-// Solution: Use MainWindow as common ancestor
+- Drag cancellation (mouse leaves window) MUST reset to original position
+- Theme toggle during drag MUST maintain visual consistency
+- Reordering MUST handle forward vs backward movement correctly (adjust insert index)
 
-// Get tab position in MainWindow coordinates
-var tabPosInWindow = tab.TransformToAncestor(MainWindow).Transform(new Point(0,0));
+---
 
-// Get canvas position in MainWindow coordinates  
-var canvasPosInWindow = dragCanvas.TransformToAncestor(MainWindow).Transform(new Point(0,0));
+**Implementation & Rationale:**
 
-// Calculate relative position
-var indicatorX = tabPosInWindow.X - canvasPosInWindow.X;
-```
-
-**Hysteresis Implementation:**
-
-Prevents flicker when mouse hovers near tab boundaries:
-
-```csharp
-double hysteresisBuffer = 5.0; // pixels
-
-if (lastDropTargetIndex == i && mouseX < tabMidX + hysteresisBuffer)
-{
-    // Stick to current target (within buffer)
-    shouldInsertHere = true;
-}
-else if (lastDropTargetIndex != i && mouseX < tabMidX - hysteresisBuffer)
-{
-    // Switch only if outside buffer
-    shouldInsertHere = true;
-}
-```
-
-**ReorderTab Index Calculation:**
-
-Handles the complexity of list reordering when moving forward vs backward:
-
-```csharp
-int insertIndex = dropTargetIndex;
-
-// Moving backward: insert index stays same
-// Moving forward: adjust for removal shift
-if (dropTargetIndex > draggedTabOriginalIndex)
-{
-    insertIndex = dropTargetIndex - 1; // Account for removal
-}
-
-// Remove from old position
-tabs.RemoveAt(draggedTabOriginalIndex);
-tabHeaderPanel.Children.RemoveAt(draggedTabOriginalIndex);
-
-// Insert at new position
-tabs.Insert(insertIndex, tab);
-tabHeaderPanel.Children.Insert(insertIndex, tab.HeaderButton);
-```
-
-**Visual Tree Structure:**
-
-```
-MainWindow (Window)
-└── Border (chrome)
-    └── Grid (main layout)
-        ├── ScrollViewer (tab strip)
-        │   └── StackPanel (tabHeaderPanel)
-        │       └── Button (tab buttons)
-        └── Canvas (dragCanvas, ZIndex=9999)
-            ├── Border (dragVisual - gray ghost tab)
-            └── Border (dropIndicator - blue line)
-```
-
-**Debug Logging:**
-
-Comprehensive logging via `OnLogDebug` event:
-- Drag start: tab index, title
-- Mouse move: current dropTargetIndex, mouse position  
-- Tab positions: startX, midX, endX for each tab
-- Coordinate transforms: window coords, canvas coords, relative positions
-- Drag complete: from→to indices, success/cancel
-
-**Edge Cases Handled:**
-
-1. **Cancel drag**: Mouse leaves window → reset to original position
-2. **Drop at end**: `dropTargetIndex == tabs.Count` → append
-3. **Drop on self**: No reorder if dropped at original index
-4. **Forward vs backward**: Insert index adjusted for removal shift
-5. **Theme changes**: Drag visual uses neutral gray (theme-independent)
-
-**Performance Considerations:**
-
-- Drag visual updates only on mouse move (not continuous)
-- Coordinate transforms cached per frame (not per tab)
-- Hysteresis reduces unnecessary indicator updates
-- Visual tree changes batched (remove→insert, not swap)
+See [Dev Note (2025-10-01)](devnotes/2025-10-01-tabs-multiline-wrapping.md) for:
+- Row detection algorithms
+- Coordinate transform details
+- Hysteresis implementation
+- Keyboard navigation grid calculation
+- Performance characteristics
+- Testing procedures
 
 ## 2) Coding Conventions
 
@@ -400,6 +300,17 @@ if (!Directory.Exists(AppDataFolder))
 - README.md for user-facing features
 - FEATURES_TO_ADD.md for MCP server progress
 - Code comments for public manager methods
+
+**Promotion Rule (Dev Notes → CR.md):**
+
+When a task-specific pattern becomes reusable across features:
+1. Create a Dev Note in `docs/devnotes/YYYY-MM-DD-<feature>.md` with implementation details
+2. Extract the **normative rule** (without code/values) and add to CR.md
+3. Add cross-link from CR.md to Dev Note for rationale/algorithms
+4. In Dev Note, add "Graduated to CR.md" entry with date
+5. Remove duplicated rule text from Dev Note (link, don't copy)
+
+See [§ Docs Governance](#12-docs-governance) for details.
 
 ## 9) Prohibited Patterns (with rationale)
 
@@ -613,6 +524,45 @@ When asked to “publish” or “make a release”, Cursor must:
   - Commit: `<short-sha>`
 - **Notes**
   - Summary: <1–2 lines of what changed/fixed>
+
+---
+
+## 12) Docs Governance
+
+### Documentation Split
+
+SnipShottyBoard maintains a clear separation between normative architecture rules and task-specific implementation details:
+
+**CR.md (this file) — Normative Spec:**
+- Stable rules, patterns, and architectural constraints
+- Design tokens and named constants only (never numeric values)
+- No code examples, algorithms, or implementation details
+- Source of truth for "what" and "why at architecture level"
+
+**Dev Notes (`docs/devnotes/`) — Implementation Details:**
+- Per-feature scope: rationale, algorithms, constants' **values**, coordinates, heuristics
+- Testing procedures, performance characteristics, known limitations
+- Task-scoped decisions and alternatives considered
+- "How" and "why at implementation level"
+
+**Promotion Workflow:**
+1. When a Dev Note pattern becomes **reusable** across features, promote it to CR.md
+2. Add normative summary in CR.md (no code, no numeric values)
+3. Add backlink from CR.md to the Dev Note for rationale/algorithms
+4. In Dev Note, add "Graduated to CR.md" entry with promotion date
+5. Remove duplicated rule text from Dev Note (link, don't copy)
+
+**Naming Convention:**
+- Dev Notes: `docs/devnotes/YYYY-MM-DD-<kebab-title>.md` (America/Chicago timezone)
+- All Dev Notes MUST include front-matter: Title, Date, Owner, Versions Affected, Links (to CR section), PR/SHAs
+
+**Governance Principles:**
+- **Link, don't copy**: CR ↔ Dev Notes use cross-references, never duplicate content
+- **CR is stable**: Changes to CR.md require careful review (impacts architecture)
+- **Dev Notes are living**: Can be updated as implementation evolves
+- **ADRs for major decisions**: Use `docs/adr/` for architectural decision records (future use)
+
+---
 
 **Architecture Quality: EXCELLENT** ⭐⭐⭐⭐⭐
 *SnipShottyBoard maintains exemplary architecture with consistent patterns, clean separation of concerns, and minimal technical debt.*

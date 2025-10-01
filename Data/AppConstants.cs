@@ -143,5 +143,37 @@ namespace SnipShottyBoard.Data
         /// </summary>
         public const double BytesToKB = 1024.0;
         #endregion
+
+        #region Tab Configuration
+        /// <summary>
+        /// Minimum tab button width in pixels
+        /// Ensures tab labels remain readable even with many tabs
+        /// </summary>
+        public const int TabMinWidth = 80;
+
+        /// <summary>
+        /// Maximum tab button width in pixels
+        /// Prevents tabs from becoming too wide in multi-row layout
+        /// </summary>
+        public const int TabMaxWidth = 200;
+
+        /// <summary>
+        /// Tab strip maximum height in pixels
+        /// Limits vertical space used by wrapped tab rows
+        /// </summary>
+        public const int TabStripMaxHeight = 200;
+
+        /// <summary>
+        /// Row grouping tolerance in pixels
+        /// Used for detecting which tabs are in the same row (Y-position tolerance)
+        /// </summary>
+        public const int TabRowGroupingTolerance = 5;
+
+        /// <summary>
+        /// Drag & drop hysteresis buffer in pixels
+        /// Prevents flickering when mouse hovers near tab boundaries during drag operations
+        /// </summary>
+        public const double TabDragHysteresisBuffer = 5.0;
+        #endregion
     }
 }

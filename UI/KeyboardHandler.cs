@@ -20,6 +20,7 @@ namespace SnipShottyBoard.UI
         public event Action OnSwitchTabRequested;
         public event Action<Image, string> OnImagePasted;
         public event Action<string> OnRichTextFormattingRequested; // New event for rich text formatting
+        public event Action<string> OnTabNavigationRequested; // Arrow key navigation: "Left", "Right", "Up", "Down", "Home", "End"
 
         public KeyboardHandler()
         {
@@ -137,6 +138,48 @@ namespace SnipShottyBoard.UI
                         OnRichTextFormattingRequested?.Invoke("indent");
                     }
                     e.Handled = true;
+                }
+            }
+            else
+            {
+                // 🎯 Arrow key navigation (only if not in text input)
+                var focusedElement = Keyboard.FocusedElement;
+                var isInTextInput = focusedElement is TextBox || focusedElement is RichTextBox;
+                
+                if (!isInTextInput)
+                {
+                    switch (e.Key)
+                    {
+                        case Key.Left:
+                            OnTabNavigationRequested?.Invoke("Left");
+                            e.Handled = true;
+                            break;
+                            
+                        case Key.Right:
+                            OnTabNavigationRequested?.Invoke("Right");
+                            e.Handled = true;
+                            break;
+                            
+                        case Key.Up:
+                            OnTabNavigationRequested?.Invoke("Up");
+                            e.Handled = true;
+                            break;
+                            
+                        case Key.Down:
+                            OnTabNavigationRequested?.Invoke("Down");
+                            e.Handled = true;
+                            break;
+                            
+                        case Key.Home:
+                            OnTabNavigationRequested?.Invoke("Home");
+                            e.Handled = true;
+                            break;
+                            
+                        case Key.End:
+                            OnTabNavigationRequested?.Invoke("End");
+                            e.Handled = true;
+                            break;
+                    }
                 }
             }
         }

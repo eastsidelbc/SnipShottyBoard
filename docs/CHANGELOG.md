@@ -5,6 +5,85 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2025-10-01
+### 🎉 Multi-Row Tab Wrapping (Major UX Enhancement)
+- **Responsive Tab Strip**: Tabs now automatically wrap into multiple rows when window width is reduced (Edge-like behavior)
+- **Row-Aware Drag & Drop**: Drop indicator positions correctly across rows; drag any tab to any row
+- **Keyboard Arrow Navigation**: 
+  - **Left/Right**: Navigate tabs sequentially with automatic row wrapping
+  - **Up/Down**: Move between rows while maintaining horizontal position
+  - **Home/End**: Jump to absolute first/last tab across all rows
+  - **Smart Context**: Arrow keys only navigate tabs when NOT in text input (preserves text editing)
+- **Vertical Scrollbar**: Tab strip now scrolls vertically when exceeding 200px height (replaces horizontal scroll)
+- **Tab Sizing Constraints**: Min width 80px (readable), max width 200px (prevents over-expansion)
+
+### 🔧 Technical Implementation
+- **WrapPanel Layout**: Replaced `StackPanel` with `WrapPanel` for automatic row wrapping
+- **Row Detection**: Groups tabs by Y-position with 5px tolerance (AppConstants.TabRowGroupingTolerance)
+- **Row-Aware Drop Target**: `FindDropTargetIndex()` detects target row, then finds insertion point within that row
+- **Row-Aware Drop Indicator**: `UpdateDropIndicator()` positions indicator using both X and Y coordinates
+- **Coordinate Transforms**: All drag/drop logic uses MainWindow as common ancestor for multi-row positioning
+- **Keyboard Navigation Logic**: Calculates row/column grid layout on-demand for arrow key traversal
+- **AppConstants**: Added tab configuration constants (TabMinWidth, TabMaxWidth, TabStripMaxHeight, TabRowGroupingTolerance, TabDragHysteresisBuffer)
+
+### 🐛 Fixed
+- **Horizontal Scroll Removed**: No more hidden tabs - all tabs visible via row wrapping
+- **Drop Indicator Positioning**: Now correctly positions in target row (not just first row)
+- **Keyboard Nav Wrapping**: Left/Right navigation wraps at row edges (end of row → start of next row)
+
+### 📚 Documentation
+- **Docs Restructuring**: Normalized documentation layout and governance
+  - Created `docs/devnotes/` for task-scoped implementation notes
+  - Created `docs/adr/` for future architectural decision records
+  - Moved `DEV_NOTES.md` → `docs/devnotes/2025-10-01-tabs-multiline-wrapping.md`
+  - Added front-matter to Dev Note (Title, Date, Owner, Versions, Links)
+  - **CR.md**: Rewritten § Tabs Pattern as normative spec (removed code/values)
+  - **CR.md**: Added § Docs Governance appendix (defines CR vs Dev Notes split)
+  - **CR.md**: Added Promotion Rule to Change Management
+  - Cross-links established: CR.md ↔ Dev Note (bidirectional)
+- **Dev Note (2025-10-01)**: Comprehensive implementation details for multi-row tabs
+  - Why multi-row wrapping was implemented
+  - Architecture changes (XAML, row detection, coordinate transforms)
+  - Drag & drop algorithms and coordinate math
+  - Keyboard navigation grid calculation
+  - Edge cases & error handling
+  - Performance characteristics and testing checklist
+- **Code Comments**: Enhanced inline documentation for row-aware logic
+
+### 📊 Performance
+- Row layout calculated on-demand (O(n) complexity, no caching)
+- Drag updates: ~60 times/second during drag (recalculates rows each move)
+- Keyboard nav: Single calculation per arrow key press
+- Excellent performance for typical usage (<50 tabs)
+
+### 🎯 Visual Tree Changes
+```
+MainWindow
+└── Grid
+    ├── ScrollViewer (vertical scroll, max 200px height)
+    │   └── WrapPanel (multi-row wrapping)
+    │       └── Button (tabs: min 80px, max 200px)
+    └── Canvas (ZIndex=9999, drag overlay)
+        ├── Border (gray ghost tab, alpha 140)
+        └── Border (blue drop indicator, row-aware)
+```
+
+### ✨ User Experience Improvements
+- **Always Visible Tabs**: All tabs remain visible via row wrapping (no horizontal scroll)
+- **Natural Navigation**: Arrow keys feel intuitive for multi-row layouts
+- **Consistent Styling**: Edge-like tab appearance maintained across all rows
+- **Drag Across Rows**: Can drag first tab to last row seamlessly
+- **Accessible**: Keyboard-only users can navigate all tabs efficiently
+
+### 🔮 Future Enhancements (Noted for consideration)
+- Tab pinning (always show in first row)
+- Row animations (smooth wrap/unwrap transitions)
+- User-configurable max height
+- Touch gesture support
+- Tab groups with visual separators
+
+---
+
 ## [1.3.0] - 2025-01-01
 ### 🎨 Tab Drag-and-Drop UX Enhancement
 - **Drop Indicator**: Added blue vertical line (3px wide) that shows exactly where tabs will be inserted during drag operations

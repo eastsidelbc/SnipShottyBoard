@@ -320,6 +320,7 @@ namespace SnipShottyBoard.UI.Views
             keyboardHandler.OnDeleteTabRequested += () => tabManager.DeleteCurrentTab();
             keyboardHandler.OnRenameTabRequested += () => tabManager.StartRenameCurrentTab();
             keyboardHandler.OnSwitchTabRequested += () => tabManager.SwitchToNextTab();
+            keyboardHandler.OnTabNavigationRequested += (direction) => tabManager.NavigateTab(direction);
             keyboardHandler.OnImagePasted += (imgControl, imagePath) => {
                 if (tabManager.SelectedTab != null)
                 {
