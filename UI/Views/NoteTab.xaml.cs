@@ -61,6 +61,9 @@ namespace SnipShottyBoard.UI.Views
         // 🔔 Event to notify when data changes (for auto-save)
         public event Action OnDataChanged;
 
+        // 📐 Event to notify when splitter ratio changes (for persistence)
+        public event Action<double> OnSplitterRatioChanged;
+
         // 🎛️ Splitter state tracking
         private bool isDraggingSplitter = false;
         private Point lastMousePosition;
@@ -83,6 +86,62 @@ namespace SnipShottyBoard.UI.Views
             // Set equal proportions initially (50/50 split)
             TextSectionRow.Height = new GridLength(1, GridUnitType.Star);
             MediaSectionRow.Height = new GridLength(1, GridUnitType.Star);
+        }
+
+        // 📐 Apply saved splitter ratio from settings
+        public void ApplySplitterRatio(double ratio)
+        {
+            try
+            {
+                // Clamp ratio to safe bounds
+                double clampedRatio = Math.Max(AppConstants.SplitterMinRatio, 
+                                       Math.Min(AppConstants.SplitterMaxRatio, ratio));
+                
+                if (double.IsNaN(clampedRatio) || double.IsInfinity(clampedRatio))
+                {
+                    clampedRatio = AppConstants.SplitterDefaultRatio;
+                }
+
+                double textStars = clampedRatio;
+                double mediaStars = 1.0 - clampedRatio;
+
+                TextSectionRow.Height = new GridLength(textStars, GridUnitType.Star);
+                MediaSectionRow.Height = new GridLength(mediaStars, GridUnitType.Star);
+
+                System.Diagnostics.Debug.WriteLine($"📐 Splitter ratio restored: {clampedRatio:F2} (Text: {clampedRatio * 100:F0}%, Media: {(1 - clampedRatio) * 100:F0}%)");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"⚠️ Error applying splitter ratio: {ex.Message}");
+                // Fall back to default
+                InitializeSplitterSizing();
+            }
+        }
+
+        // 📊 Get current splitter ratio for saving
+        public double GetSplitterRatio()
+        {
+            try
+            {
+                double textStars = TextSectionRow.Height.Value;
+                double mediaStars = MediaSectionRow.Height.Value;
+                double total = textStars + mediaStars;
+
+                if (total <= 0 || double.IsNaN(total) || double.IsInfinity(total))
+                {
+                    return AppConstants.SplitterDefaultRatio;
+                }
+
+                double ratio = textStars / total;
+                
+                // Clamp to safe bounds
+                return Math.Max(AppConstants.SplitterMinRatio, 
+                               Math.Min(AppConstants.SplitterMaxRatio, ratio));
+            }
+            catch
+            {
+                return AppConstants.SplitterDefaultRatio;
+            }
         }
 
         #region Splitter Event Handlers
@@ -129,6 +188,12 @@ namespace SnipShottyBoard.UI.Views
                 isDraggingSplitter = false;
                 var splitter = sender as Border;
                 splitter?.ReleaseMouseCapture();
+                
+                // 💾 Save splitter ratio when drag ends
+                double currentRatio = GetSplitterRatio();
+                OnSplitterRatioChanged?.Invoke(currentRatio);
+                System.Diagnostics.Debug.WriteLine($"💾 Splitter ratio saved: {currentRatio:F2} (Text: {currentRatio * 100:F0}%, Media: {(1 - currentRatio) * 100:F0}%)");
+                
                 e.Handled = true;
             }
         }

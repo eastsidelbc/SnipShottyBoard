@@ -549,6 +549,24 @@ namespace SnipShottyBoard.UI
                     }
                 };
 
+                // 📐 Wire up splitter ratio persistence
+                noteTab.OnSplitterRatioChanged += (ratio) =>
+                {
+                    try
+                    {
+                        if (appSettings != null)
+                        {
+                            appSettings.SplitterTextMediaRatio = ratio;
+                            OnSettingsNeedUpdate?.Invoke(); // Trigger save
+                            OnLogDebug?.Invoke($"📐 Splitter ratio updated in settings: {ratio:F2}", string.Empty);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        OnLogError?.Invoke("Error saving splitter ratio", ex);
+                    }
+                };
+
                 OnLogDebug?.Invoke("✅ Data changed handler wired", string.Empty);
 
                 // 🧠 Create custom tab object
@@ -579,6 +597,23 @@ namespace SnipShottyBoard.UI
                 };
 
                 OnLogDebug?.Invoke("✅ Click handler wired", string.Empty);
+
+                // 📐 Apply saved splitter ratio after layout is ready
+                noteTab.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        if (appSettings != null)
+                        {
+                            noteTab.ApplySplitterRatio(appSettings.SplitterTextMediaRatio);
+                            OnLogDebug?.Invoke($"📐 Applied saved splitter ratio: {appSettings.SplitterTextMediaRatio:F2}", string.Empty);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        OnLogError?.Invoke("Error applying splitter ratio", ex);
+                    }
+                }), System.Windows.Threading.DispatcherPriority.Loaded);
 
                 // 📍 Add to collections
                 tabs.Add(customTab);
@@ -914,6 +949,24 @@ namespace SnipShottyBoard.UI
             // 🔔 Wire up change tracking for auto-save
             newNoteTab.OnDataChanged += () => OnDataChanged?.Invoke(true);
 
+            // 📐 Wire up splitter ratio persistence for duplicated tabs
+            newNoteTab.OnSplitterRatioChanged += (ratio) =>
+            {
+                try
+                {
+                    if (appSettings != null)
+                    {
+                        appSettings.SplitterTextMediaRatio = ratio;
+                        OnSettingsNeedUpdate?.Invoke();
+                        OnLogDebug?.Invoke($"📐 Splitter ratio updated in settings: {ratio:F2}", string.Empty);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    OnLogError?.Invoke("Error saving splitter ratio", ex);
+                }
+            };
+
             var duplicateTab = new CustomTab
             {
                 Title = duplicateTitle,
@@ -934,6 +987,23 @@ namespace SnipShottyBoard.UI
             tabs.Add(duplicateTab);
             tabHeaderPanel.Children.Add(duplicateTab.HeaderButton);
             SelectTab(duplicateTab);
+
+            // 📐 Apply saved splitter ratio after layout is ready
+            newNoteTab.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    if (appSettings != null)
+                    {
+                        newNoteTab.ApplySplitterRatio(appSettings.SplitterTextMediaRatio);
+                        OnLogDebug?.Invoke($"📐 Applied saved splitter ratio to duplicated tab: {appSettings.SplitterTextMediaRatio:F2}", string.Empty);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    OnLogError?.Invoke("Error applying splitter ratio to duplicated tab", ex);
+                }
+            }), System.Windows.Threading.DispatcherPriority.Loaded);
 
             OnDataChanged?.Invoke(true); // 💾 Mark as changed for auto-save
         }
@@ -1171,6 +1241,24 @@ namespace SnipShottyBoard.UI
                             OnStatusUpdateRequested?.Invoke();
                         };
 
+                        // 📐 Wire up splitter ratio persistence for loaded tabs
+                        noteTab.OnSplitterRatioChanged += (ratio) =>
+                        {
+                            try
+                            {
+                                if (appSettings != null)
+                                {
+                                    appSettings.SplitterTextMediaRatio = ratio;
+                                    OnSettingsNeedUpdate?.Invoke();
+                                    OnLogDebug?.Invoke($"📐 Splitter ratio updated in settings: {ratio:F2}", string.Empty);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                OnLogError?.Invoke("Error saving splitter ratio", ex);
+                            }
+                        };
+
                         var customTab = new CustomTab
                         {
                             Title = savedNote.Title,
@@ -1182,6 +1270,23 @@ namespace SnipShottyBoard.UI
 
                         tabs.Add(customTab);
                         tabHeaderPanel.Children.Add(customTab.HeaderButton);
+
+                        // 📐 Apply saved splitter ratio after layout is ready
+                        noteTab.Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            try
+                            {
+                                if (appSettings != null)
+                                {
+                                    noteTab.ApplySplitterRatio(appSettings.SplitterTextMediaRatio);
+                                    OnLogDebug?.Invoke($"📐 Applied saved splitter ratio to loaded tab: {appSettings.SplitterTextMediaRatio:F2}", string.Empty);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                OnLogError?.Invoke("Error applying splitter ratio to loaded tab", ex);
+                            }
+                        }), System.Windows.Threading.DispatcherPriority.Loaded);
                     }
 
                     // Select the first tab

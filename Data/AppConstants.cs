@@ -175,5 +175,25 @@ namespace SnipShottyBoard.Data
         /// </summary>
         public const double TabDragHysteresisBuffer = 5.0;
         #endregion
+
+        #region Splitter Configuration
+        /// <summary>
+        /// Minimum ratio for text section in Text/Media splitter
+        /// Prevents text section from being collapsed too small
+        /// </summary>
+        public const double SplitterMinRatio = 0.2;
+
+        /// <summary>
+        /// Maximum ratio for text section in Text/Media splitter
+        /// Prevents media section from being collapsed too small
+        /// </summary>
+        public const double SplitterMaxRatio = 0.8;
+
+        /// <summary>
+        /// Default ratio for text section in Text/Media splitter
+        /// Represents 50/50 split between text and media sections
+        /// </summary>
+        public const double SplitterDefaultRatio = 0.5;
+        #endregion
     }
 }

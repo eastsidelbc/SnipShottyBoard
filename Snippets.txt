@@ -1,0 +1,26 @@
+READ FIRST:
+- Open docs/CR.md; summarize relevant rules (bullets).
+- List ambiguities/conflicts (or “None”).
+- Confirm: “I will not duplicate CR content in Dev Notes; I will link to it.”
+
+THEN:
+- Create/append today’s Dev Note at docs/devnotes/YYYY-MM-DD-tabs-multiline-wrapping.md (America/Chicago).
+- Add front-matter (Title, Date, Owner, Versions Affected, Links to CR & PR/SHAs).
+- Put algorithms, constants (actual numbers), tests in the Dev Note.
+- Update CR.md ONLY if a reusable rule changes; keep it short & normative and link back to the Dev Note.
+- Update CHANGELOG.md ([Unreleased] or new version) with a “Docs” bullet and Dev Note link.
+
+
+
+
+-------------------------------------------------------------------------------------------
+
+
+
+CR LINT:
+- Are rules stated as MUST/SHOULD (not tutorials)?
+- Any raw numbers duplicated from code? (Replace with token/constant NAMES.)
+- Any implementation steps/logs in CR? (Move to Dev Note.)
+- Are sections anchorable (e.g., ## Tabs Pattern) with short, testable bullets?
+- Cross-links: CR → latest Dev Note, Dev Note → CR?
+Output fixes or “Looks clean”.

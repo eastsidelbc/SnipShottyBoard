@@ -131,6 +131,19 @@ namespace SnipShottyBoard.Core.Models
         // 
         // Combined with WindowLeft, this restores the window to its exact position.
         public double WindowTop { get; set; } = AppConstants.DefaultWindowTop;
+
+        // 📐 Splitter Position - Text/Media divider ratio
+        // 
+        // This stores the position of the splitter between TextSection and MediaSection
+        // as a ratio (0.0 to 1.0) representing the proportion of the TextSection.
+        // 
+        // For example:
+        // - 0.5 = 50/50 split (default)
+        // - 0.3 = 30% text, 70% media
+        // - 0.7 = 70% text, 30% media
+        // 
+        // Stored as ratio (not pixels) so it scales correctly across different window sizes and DPIs.
+        public double SplitterTextMediaRatio { get; set; } = AppConstants.SplitterDefaultRatio;
         #endregion
 
         #region Tab Settings
