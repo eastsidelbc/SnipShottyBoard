@@ -91,13 +91,19 @@ namespace SnipShottyBoard.UI
         // 🎨 Initialize drag canvas for visual feedback
         private void InitializeDragCanvas()
         {
-            // Create a canvas that covers the entire window for drag visuals
-            dragCanvas = new Canvas
+            try
             {
-                Background = Brushes.Transparent,
-                IsHitTestVisible = false
-            };
-            
+                OnLogDebug?.Invoke("🎨 Starting drag canvas initialization", string.Empty);
+                
+                // Create a canvas that covers the entire window for drag visuals
+                dragCanvas = new Canvas
+                {
+                    Background = Brushes.Transparent,
+                    IsHitTestVisible = false
+                };
+                
+                OnLogDebug?.Invoke("🎨 Drag canvas created", string.Empty);
+                
             // 📍 Create drop indicator line
             dropIndicator = new Border
             {
@@ -105,22 +111,44 @@ namespace SnipShottyBoard.UI
                 Height = 30,
                 Background = new SolidColorBrush(Color.FromRgb(74, 144, 226)), // Blue indicator
                 CornerRadius = new CornerRadius(1.5),
-                Visibility = Visibility.Hidden,
+                Visibility = Visibility.Hidden, // Hidden by default, shown during drag
                 Opacity = 0.8
             };
-            
-            // Add to the main window (we'll need to add this to the MainWindow's grid)
-            if (Application.Current.MainWindow is MainWindow mainWindow)
-            {
-                // Find the main grid and add our drag canvas
-                if (mainWindow.Content is Border border && border.Child is Grid mainGrid)
+                
+                OnLogDebug?.Invoke("🎨 Drop indicator created", string.Empty);
+                
+                // Add to the main window (we'll need to add this to the MainWindow's grid)
+                if (Application.Current.MainWindow is MainWindow mainWindow)
                 {
-                    mainGrid.Children.Add(dragCanvas);
-                    Panel.SetZIndex(dragCanvas, 9999); // Ensure it's on top
+                    OnLogDebug?.Invoke($"🎨 Found MainWindow: {mainWindow.GetType().Name}", string.Empty);
+                    OnLogDebug?.Invoke($"🎨 MainWindow.Content type: {mainWindow.Content?.GetType().Name}", string.Empty);
                     
-                    // Add drop indicator to canvas
-                    dragCanvas.Children.Add(dropIndicator);
+                    // Find the main grid and add our drag canvas
+                    if (mainWindow.Content is Border border && border.Child is Grid mainGrid)
+                    {
+                        OnLogDebug?.Invoke($"🎨 Found main grid with {mainGrid.Children.Count} children", string.Empty);
+                        
+                        mainGrid.Children.Add(dragCanvas);
+                        Panel.SetZIndex(dragCanvas, 9999); // Ensure it's on top
+                        
+                        // Add drop indicator to canvas
+                        dragCanvas.Children.Add(dropIndicator);
+                        
+                        OnLogDebug?.Invoke("✅ Drag canvas and drop indicator added to main grid successfully", string.Empty);
+                    }
+                    else
+                    {
+                        OnLogError?.Invoke("❌ Could not find main grid structure in MainWindow", new Exception("MainWindow structure mismatch"));
+                    }
                 }
+                else
+                {
+                    OnLogError?.Invoke("❌ Could not find MainWindow instance", new Exception("MainWindow not found"));
+                }
+            }
+            catch (Exception ex)
+            {
+                OnLogError?.Invoke("❌ Error initializing drag canvas", ex);
             }
         }
 
@@ -135,6 +163,8 @@ namespace SnipShottyBoard.UI
                 dragStartPoint = startPoint;
                 draggedTab = tabButton;
                 draggedTabOriginalIndex = GetTabIndex(tabButton);
+                
+                OnLogDebug?.Invoke($"🎯 Drag started for tab at index {draggedTabOriginalIndex}", string.Empty);
                 
                 // 🎨 Create visual feedback
                 CreateDragVisual(tabButton);
@@ -199,19 +229,27 @@ namespace SnipShottyBoard.UI
         // 📍 Update drop indicator position and visibility
         private void UpdateDropIndicator(int targetIndex)
         {
-            if (dropIndicator == null || tabHeaderPanel == null) return;
+            if (dropIndicator == null || tabHeaderPanel == null) 
+            {
+                OnLogDebug?.Invoke($"🚫 UpdateDropIndicator skipped - dropIndicator: {dropIndicator != null}, tabHeaderPanel: {tabHeaderPanel != null}", string.Empty);
+                return;
+            }
             
             try
             {
+                OnLogDebug?.Invoke($"📍 UpdateDropIndicator called with targetIndex: {targetIndex}, isDragging: {isDragging}", string.Empty);
+                
                 if (targetIndex < 0 || !isDragging)
                 {
                     // Hide indicator
                     dropIndicator.Visibility = Visibility.Hidden;
+                    OnLogDebug?.Invoke("📍 Drop indicator hidden", string.Empty);
                     return;
                 }
                 
                 // Show indicator
                 dropIndicator.Visibility = Visibility.Visible;
+                OnLogDebug?.Invoke("📍 Drop indicator shown", string.Empty);
                 
                 // Calculate position for drop indicator
                 double indicatorX = 0;
@@ -222,10 +260,13 @@ namespace SnipShottyBoard.UI
                     if (tabHeaderPanel.Children.Count > 0)
                     {
                         var lastTab = tabHeaderPanel.Children[tabHeaderPanel.Children.Count - 1] as Button;
-                        if (lastTab != null)
+                        if (lastTab != null && Application.Current.MainWindow != null)
                         {
-                            var lastTabPos = lastTab.TransformToAncestor(dragCanvas).Transform(new Point(0, 0));
-                            indicatorX = lastTabPos.X + lastTab.ActualWidth + 2;
+                            // Transform from tab to main window, then to drag canvas
+                            var lastTabPosInWindow = lastTab.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
+                            var canvasPosInWindow = dragCanvas.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
+                            indicatorX = lastTabPosInWindow.X - canvasPosInWindow.X + lastTab.ActualWidth + 2;
+                            OnLogDebug?.Invoke($"📍 Positioning at end: X={indicatorX}", string.Empty);
                         }
                     }
                 }
@@ -233,10 +274,13 @@ namespace SnipShottyBoard.UI
                 {
                     // Drop before target tab
                     var targetTab = tabHeaderPanel.Children[targetIndex] as Button;
-                    if (targetTab != null)
+                    if (targetTab != null && Application.Current.MainWindow != null)
                     {
-                        var targetTabPos = targetTab.TransformToAncestor(dragCanvas).Transform(new Point(0, 0));
-                        indicatorX = targetTabPos.X - 2;
+                        // Transform from tab to main window, then to drag canvas
+                        var targetTabPosInWindow = targetTab.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
+                        var canvasPosInWindow = dragCanvas.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
+                        indicatorX = targetTabPosInWindow.X - canvasPosInWindow.X - 2;
+                        OnLogDebug?.Invoke($"📍 Positioning before tab {targetIndex}: X={indicatorX}", string.Empty);
                     }
                 }
                 
@@ -247,11 +291,15 @@ namespace SnipShottyBoard.UI
                 if (tabHeaderPanel.Children.Count > 0)
                 {
                     var firstTab = tabHeaderPanel.Children[0] as Button;
-                    if (firstTab != null)
+                    if (firstTab != null && Application.Current.MainWindow != null)
                     {
-                        var tabPos = firstTab.TransformToAncestor(dragCanvas).Transform(new Point(0, 0));
-                        Canvas.SetTop(dropIndicator, tabPos.Y + 1);
+                        // Transform from tab to main window, then to drag canvas  
+                        var tabPosInWindow = firstTab.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
+                        var canvasPosInWindow = dragCanvas.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
+                        var indicatorY = tabPosInWindow.Y - canvasPosInWindow.Y + 1;
+                        Canvas.SetTop(dropIndicator, indicatorY);
                         dropIndicator.Height = firstTab.ActualHeight - 2;
+                        OnLogDebug?.Invoke($"📍 Final position: X={indicatorX}, Y={indicatorY}, Height={dropIndicator.Height}", string.Empty);
                     }
                 }
             }
