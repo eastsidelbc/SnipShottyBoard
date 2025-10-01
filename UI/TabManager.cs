@@ -163,6 +163,7 @@ namespace SnipShottyBoard.UI
                 dragStartPoint = startPoint;
                 draggedTab = tabButton;
                 draggedTabOriginalIndex = GetTabIndex(tabButton);
+                lastDropTargetIndex = -1; // Reset hysteresis tracking
                 
                 OnLogDebug?.Invoke($"🎯 Drag started for tab at index {draggedTabOriginalIndex}", string.Empty);
                 
@@ -185,20 +186,20 @@ namespace SnipShottyBoard.UI
         {
             try
             {
-                // 📏 Create a visual copy of the tab button
+                // 📏 Create a visual copy of the tab button with neutral color so blue drop indicator is visible
                 var visualCopy = new Border
                 {
-                    Background = new SolidColorBrush(Colors.LightBlue) { Opacity = 0.8 },
-                    BorderBrush = new SolidColorBrush(Colors.Blue),
+                    Background = new SolidColorBrush(Color.FromArgb(200, 128, 128, 128)), // Semi-transparent gray
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(180, 96, 96, 96)),   // Darker gray border
                     BorderThickness = new Thickness(2, 2, 2, 2),
-                    CornerRadius = new CornerRadius(4),
+                    CornerRadius = new CornerRadius(3, 3, 0, 0), // Match Edge-like rounded top corners
                     Width = sourceButton.ActualWidth,
                     Height = sourceButton.ActualHeight,
                     Child = new TextBlock
                     {
                         Text = GetTabTitle(sourceButton),
-                        Foreground = Brushes.DarkBlue,
-                        FontWeight = FontWeights.Bold,
+                        Foreground = Brushes.White, // White text for contrast on gray
+                        FontWeight = FontWeights.Medium,
                         VerticalAlignment = VerticalAlignment.Center,
                         HorizontalAlignment = HorizontalAlignment.Center,
                         Margin = new Thickness(8, 4, 8, 4)
@@ -315,30 +316,60 @@ namespace SnipShottyBoard.UI
         {
             try
             {
-                // 📍 Convert mouse position to tab panel coordinates
-                var relativePosition = tabHeaderPanel.PointFromScreen(
-                    draggedTab.PointToScreen(mousePosition));
-
+                OnLogDebug?.Invoke($"🎯 FindDropTargetIndex called with mousePosition: {mousePosition}", string.Empty);
+                
+                // Use the mouse position directly - it's already relative to tabHeaderPanel
+                double mouseX = mousePosition.X;
+                OnLogDebug?.Invoke($"🎯 Mouse X position: {mouseX}", string.Empty);
+                
                 // 🔍 Find which tab position we're over
                 for (int i = 0; i < tabHeaderPanel.Children.Count; i++)
                 {
                     if (tabHeaderPanel.Children[i] is Button tabButton)
                     {
+                        // Get tab's position relative to tabHeaderPanel
                         var tabPosition = tabButton.TransformToAncestor(tabHeaderPanel)
                             .Transform(new Point(0, 0));
                         
-                        if (relativePosition.X < tabPosition.X + tabButton.ActualWidth / 2)
+                        double tabStartX = tabPosition.X;
+                        double tabMidX = tabPosition.X + tabButton.ActualWidth / 2;
+                        double tabEndX = tabPosition.X + tabButton.ActualWidth;
+                        
+                        OnLogDebug?.Invoke($"🎯 Tab {i}: StartX={tabStartX:F1}, MidX={tabMidX:F1}, EndX={tabEndX:F1}", string.Empty);
+                        
+                        // If mouse is before the midpoint of this tab, insert before it
+                        // Add hysteresis: require at least 5px movement to change drop target
+                        double hysteresisBuffer = 5.0;
+                        bool shouldInsertHere = false;
+                        
+                        if (lastDropTargetIndex == i && mouseX < tabMidX + hysteresisBuffer)
                         {
+                            // Stick to current target if we're within hysteresis buffer
+                            shouldInsertHere = true;
+                        }
+                        else if (lastDropTargetIndex != i && mouseX < tabMidX - hysteresisBuffer)
+                        {
+                            // Switch to new target only if we're outside hysteresis buffer
+                            shouldInsertHere = true;
+                        }
+                        
+                        if (shouldInsertHere)
+                        {
+                            OnLogDebug?.Invoke($"🎯 Mouse before tab {i} midpoint - returning index {i}", string.Empty);
+                            lastDropTargetIndex = i;
                             return i;
                         }
                     }
                 }
                 
                 // 📍 If past all tabs, drop at end
+                OnLogDebug?.Invoke($"🎯 Mouse past all tabs - returning end index {tabHeaderPanel.Children.Count}", string.Empty);
+                lastDropTargetIndex = tabHeaderPanel.Children.Count;
                 return tabHeaderPanel.Children.Count;
             }
-            catch
+            catch (Exception ex)
             {
+                OnLogError?.Invoke("Error finding drop target index", ex);
                 return draggedTabOriginalIndex; // Default to original position
             }
         }
@@ -1188,6 +1219,10 @@ namespace SnipShottyBoard.UI
         {
             try
             {
+                // 🎯 Set Tag property for Edge-like styling triggers
+                tab.HeaderButton.Tag = isSelected ? "Selected" : null;
+                
+                // 🎨 Set background brush (kept for fallback compatibility)
                 var targetBrush = isSelected 
                     ? (Brush)Application.Current.FindResource("TabBackgroundBrush") 
                     : Brushes.Transparent;
@@ -1208,11 +1243,11 @@ namespace SnipShottyBoard.UI
                     }
                 }
                 
-                // System.Diagnostics.Debug.WriteLine($"🎨 Tab selection updated: {tab.Title}, Selected: {isSelected}, Brush: {targetBrush}");
+                OnLogDebug?.Invoke($"🎨 Tab selection updated: {tab.Title}, Selected: {isSelected}, Tag: {tab.HeaderButton.Tag}", string.Empty);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Failed to get TabBackgroundBrush: {ex.Message}");
+                OnLogError?.Invoke($"Failed to update tab selection for {tab.Title}", ex);
                 
                 // Fallback with proper contrast - detect if we're in dark mode
                 if (isSelected)

@@ -54,6 +54,165 @@
 - Cross-manager communication via events only
 - External dependencies (Serilog, WPF-UI) isolated to specific layers
 
+## 1.5) Tab Drag-and-Drop System
+
+**Overview:**
+The tab drag-and-drop system in `TabManager.cs` provides an intuitive UX for reordering tabs with visual feedback. It consists of three main components: drag visual (ghost tab), drop indicator (blue line), and reorder logic.
+
+**Core Components:**
+
+1. **Drag Canvas**
+   - Full-window overlay canvas (`dragCanvas`) with `ZIndex=9999`
+   - Transparent background, non-hit-testable  
+   - Contains both drag visual and drop indicator
+   - Added to MainWindow's root Grid during initialization
+
+2. **Drag Visual (Ghost Tab)**
+   - Semi-transparent gray Border showing the dragged tab  
+   - Color: `#C8808080` (ARGB) - gray to contrast with blue drop indicator
+   - Follows mouse cursor during drag
+   - Rounded top corners (`3,3,0,0`) matching Edge-like tab style
+   - White text for visibility
+
+3. **Drop Indicator (Blue Line)**
+   - 3px wide, height matches tab height
+   - Color: `#4A90E2` (blue accent brush)
+   - Shows insertion point between tabs
+   - Updates on mouse move with coordinate transforms
+
+**Drag Flow:**
+
+```csharp
+// 1. Drag Start (mouse down + movement threshold)
+StartDragOperation(Button tabButton, Point startPoint)
+├── Set isDragging = true
+├── Record draggedTabOriginalIndex
+├── Create gray drag visual
+├── Capture mouse on tab button
+└── Log drag start event
+
+// 2. Drag Move (mouse move while dragging)
+PreviewMouseMove Handler
+├── Update drag visual position (follows cursor)
+├── Calculate dropTargetIndex via FindDropTargetIndex()
+│   ├── Transform mouse coords to tabHeaderPanel space
+│   ├── Iterate through tabs, check against midpoints
+│   ├── Apply 5px hysteresis buffer (prevent flicker)
+│   └── Return insertion index (0 to N)
+└── Update drop indicator position via UpdateDropIndicator()
+
+// 3. Drag End (mouse up or leave window)
+CompleteDragOperation(bool performReorder)
+├── If performReorder: call ReorderTab()
+│   ├── Calculate correct insert index (forward/backward)
+│   ├── Remove tab from original position
+│   ├── Insert at new position
+│   ├── Update UI collections (tabs[], tabHeaderPanel)
+│   └── Select moved tab
+├── Hide drop indicator
+├── Remove drag visual
+├── Reset drag state
+└── Log completion (from→to indices)
+```
+
+**Coordinate Transformation Logic:**
+
+The drop indicator positioning uses proper WPF coordinate transforms:
+
+```csharp
+// Problem: dragCanvas and tab buttons are in different visual tree branches
+// Solution: Use MainWindow as common ancestor
+
+// Get tab position in MainWindow coordinates
+var tabPosInWindow = tab.TransformToAncestor(MainWindow).Transform(new Point(0,0));
+
+// Get canvas position in MainWindow coordinates  
+var canvasPosInWindow = dragCanvas.TransformToAncestor(MainWindow).Transform(new Point(0,0));
+
+// Calculate relative position
+var indicatorX = tabPosInWindow.X - canvasPosInWindow.X;
+```
+
+**Hysteresis Implementation:**
+
+Prevents flicker when mouse hovers near tab boundaries:
+
+```csharp
+double hysteresisBuffer = 5.0; // pixels
+
+if (lastDropTargetIndex == i && mouseX < tabMidX + hysteresisBuffer)
+{
+    // Stick to current target (within buffer)
+    shouldInsertHere = true;
+}
+else if (lastDropTargetIndex != i && mouseX < tabMidX - hysteresisBuffer)
+{
+    // Switch only if outside buffer
+    shouldInsertHere = true;
+}
+```
+
+**ReorderTab Index Calculation:**
+
+Handles the complexity of list reordering when moving forward vs backward:
+
+```csharp
+int insertIndex = dropTargetIndex;
+
+// Moving backward: insert index stays same
+// Moving forward: adjust for removal shift
+if (dropTargetIndex > draggedTabOriginalIndex)
+{
+    insertIndex = dropTargetIndex - 1; // Account for removal
+}
+
+// Remove from old position
+tabs.RemoveAt(draggedTabOriginalIndex);
+tabHeaderPanel.Children.RemoveAt(draggedTabOriginalIndex);
+
+// Insert at new position
+tabs.Insert(insertIndex, tab);
+tabHeaderPanel.Children.Insert(insertIndex, tab.HeaderButton);
+```
+
+**Visual Tree Structure:**
+
+```
+MainWindow (Window)
+└── Border (chrome)
+    └── Grid (main layout)
+        ├── ScrollViewer (tab strip)
+        │   └── StackPanel (tabHeaderPanel)
+        │       └── Button (tab buttons)
+        └── Canvas (dragCanvas, ZIndex=9999)
+            ├── Border (dragVisual - gray ghost tab)
+            └── Border (dropIndicator - blue line)
+```
+
+**Debug Logging:**
+
+Comprehensive logging via `OnLogDebug` event:
+- Drag start: tab index, title
+- Mouse move: current dropTargetIndex, mouse position  
+- Tab positions: startX, midX, endX for each tab
+- Coordinate transforms: window coords, canvas coords, relative positions
+- Drag complete: from→to indices, success/cancel
+
+**Edge Cases Handled:**
+
+1. **Cancel drag**: Mouse leaves window → reset to original position
+2. **Drop at end**: `dropTargetIndex == tabs.Count` → append
+3. **Drop on self**: No reorder if dropped at original index
+4. **Forward vs backward**: Insert index adjusted for removal shift
+5. **Theme changes**: Drag visual uses neutral gray (theme-independent)
+
+**Performance Considerations:**
+
+- Drag visual updates only on mouse move (not continuous)
+- Coordinate transforms cached per frame (not per tab)
+- Hysteresis reduces unnecessary indicator updates
+- Visual tree changes batched (remove→insert, not swap)
+
 ## 2) Coding Conventions
 
 **File Naming & Organization:**
