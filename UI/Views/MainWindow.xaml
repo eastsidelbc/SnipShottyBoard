@@ -55,13 +55,14 @@
                     <ColumnDefinition Width="Auto" />  <!-- + button -->
                     <ColumnDefinition Width="*" />     <!-- Draggable area -->
                     <ColumnDefinition Width="Auto" />  <!-- 📝 note windows button -->
-                    <ColumnDefinition Width="Auto" />  <!-- 📁 logs folder button -->
                     <ColumnDefinition Width="Auto" />  <!-- ⚙️ settings button -->
                     <ColumnDefinition Width="Auto" />  <!-- 🗑️ delete button -->
                     <ColumnDefinition Width="Auto" />  <!-- Theme toggle -->
                     <ColumnDefinition Width="Auto" />  <!-- ℹ️ help button -->
                     <ColumnDefinition Width="Auto" />  <!-- 🔧 developer button -->
-                    <ColumnDefinition Width="Auto" />  <!-- × button -->
+                    <ColumnDefinition Width="Auto" />  <!-- 📌 pin button (always on top) -->
+                    <ColumnDefinition Width="Auto" />  <!-- − minimize button -->
+                    <ColumnDefinition Width="Auto" />  <!-- × close button -->
                 </Grid.ColumnDefinitions>
 
                 <!-- ➕ New Tab Button -->
@@ -83,16 +84,8 @@
                         ToolTip="Manage note windows"
                         WindowChrome.IsHitTestVisibleInChrome="True" />
 
-                <!-- 📁 Logs Folder Button -->
-                <Button Grid.Column="3" 
-                        Content="📁"
-                        Style="{DynamicResource HeaderButtonStyle}"
-                        Click="LogsFolder_Click"
-                        ToolTip="Open logs folder"
-                        WindowChrome.IsHitTestVisibleInChrome="True" />
-
                 <!-- ⚙️ Settings Button -->
-                <Button Grid.Column="4" 
+                <Button Grid.Column="3" 
                         Content="⚙️"
                         Style="{DynamicResource HeaderButtonStyle}"
                         Click="Settings_Click"
@@ -100,7 +93,7 @@
                         WindowChrome.IsHitTestVisibleInChrome="True" />
 
                 <!-- 🗑️ Delete Tab Button -->
-                <Button Grid.Column="5" 
+                <Button Grid.Column="4" 
                         Content="🗑️"
                         Style="{DynamicResource HeaderButtonStyle}"
                         Click="DeleteTab_Click"
@@ -108,7 +101,7 @@
                         WindowChrome.IsHitTestVisibleInChrome="True" />
 
                 <!-- 🌙 Theme Toggle Button -->
-                <Button Grid.Column="6" 
+                <Button Grid.Column="5" 
                         Content="🌙"
                         Style="{DynamicResource HeaderButtonStyle}"
                         Click="ToggleTheme_Click"
@@ -116,7 +109,7 @@
                         WindowChrome.IsHitTestVisibleInChrome="True" />
 
                 <!-- ℹ️ Help Button -->
-                <Button Grid.Column="7" 
+                <Button Grid.Column="6" 
                         Content="?"
                         Style="{DynamicResource HeaderButtonStyle}"
                         Click="Help_Click"
@@ -124,15 +117,34 @@
                         WindowChrome.IsHitTestVisibleInChrome="True" />
 
                 <!-- 🔧 Developer Button -->
-                <Button Grid.Column="8" 
+                <Button Grid.Column="7" 
                         Content="🔧"
                         Style="{DynamicResource HeaderButtonStyle}"
                         Click="Developer_Click"
-                        ToolTip="Developer tools"
+                        ToolTip="Developer tools (logs, diagnostics)"
+                        WindowChrome.IsHitTestVisibleInChrome="True" />
+
+                <!-- 📌 Pin Button (Always on Top) -->
+                <Button x:Name="PinButton"
+                        Grid.Column="8" 
+                        Content="📌"
+                        Style="{DynamicResource HeaderButtonStyle}"
+                        Click="Pin_Click"
+                        ToolTip="Always on top: Off"
+                        WindowChrome.IsHitTestVisibleInChrome="True" />
+
+                <!-- − Minimize Button -->
+                <Button Grid.Column="9" 
+                        Content="−"
+                        Style="{DynamicResource HeaderButtonStyle}"
+                        Click="Minimize_Click"
+                        ToolTip="Minimize"
+                        FontSize="20"
+                        FontWeight="Bold"
                         WindowChrome.IsHitTestVisibleInChrome="True" />
 
                 <!-- ❌ Close Button -->
-                <Button Grid.Column="9" 
+                <Button Grid.Column="10" 
                         Content="×"
                         Style="{DynamicResource HeaderButtonStyle}"
                         Click="Close_Click"

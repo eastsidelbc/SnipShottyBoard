@@ -463,23 +463,68 @@ namespace SnipShottyBoard.UI.Views
         /// <summary>
         /// Opens the application logs folder in Windows Explorer
         /// </summary>
-        private void LogsFolder_Click(object sender, RoutedEventArgs e)
+        // 📌 Pin button click - toggle always on top
+        private void Pin_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                var logsFolder = LoggingService.GetLogsFolder();
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(logsFolder) 
-                { 
-                    UseShellExecute = true 
-                });
-                loggingService.LogInfo("📁 UI: Opened logs folder from header button", "UI");
+                bool newState = !this.Topmost;
+                this.Topmost = newState;
+                
+                if (currentSettings != null)
+                {
+                    currentSettings.AlwaysOnTop = newState;
+                    DataManager.SaveSettings(currentSettings);
+                    loggingService.LogDebug($"📌 Always on top: {(newState ? "ON" : "OFF")}", "UI");
+                }
+                
+                UpdatePinButtonVisual(newState);
             }
             catch (Exception ex)
             {
-                loggingService.LogError("❌ UI: Failed to open logs folder", ex, "UI");
-                // Fallback: show the path to user
-                MessageBox.Show($"Could not open logs folder. Path: {LoggingService.GetLogsFolder()}", 
-                               "Open Logs Folder", MessageBoxButton.OK, MessageBoxImage.Information);
+                loggingService.LogError("Failed to toggle always on top", ex, "UI");
+            }
+        }
+
+        // − Minimize button click
+        private void Minimize_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                this.WindowState = WindowState.Minimized;
+                loggingService.LogDebug("− Window minimized", "UI");
+            }
+            catch (Exception ex)
+            {
+                loggingService.LogError("Failed to minimize window", ex, "UI");
+            }
+        }
+
+        // 🎨 Update pin button visual based on state
+        private void UpdatePinButtonVisual(bool isPinned)
+        {
+            try
+            {
+                if (PinButton != null)
+                {
+                    if (isPinned)
+                    {
+                        PinButton.Background = (System.Windows.Media.Brush)FindResource("TabBackgroundBrush");
+                        PinButton.BorderBrush = (System.Windows.Media.Brush)FindResource("AccentBrush");
+                        PinButton.BorderThickness = new Thickness(0, 0, 0, 2);
+                        PinButton.ToolTip = "Always on top: On";
+                    }
+                    else
+                    {
+                        PinButton.Background = System.Windows.Media.Brushes.Transparent;
+                        PinButton.BorderThickness = new Thickness(0);
+                        PinButton.ToolTip = "Always on top: Off";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                loggingService?.LogError("Failed to update pin button visual", ex, "UI");
             }
         }
 
@@ -612,6 +657,18 @@ namespace SnipShottyBoard.UI.Views
                 else
                 {
                     tabManager.CreateNewTab();
+                }
+
+                // 📌 Apply saved AlwaysOnTop state and update pin button visual
+                if (currentSettings != null)
+                {
+                    this.Topmost = currentSettings.AlwaysOnTop;
+                    // Defer pin button visual update until UI is fully loaded
+                    this.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        UpdatePinButtonVisual(currentSettings.AlwaysOnTop);
+                    }), System.Windows.Threading.DispatcherPriority.Loaded);
+                    loggingService.LogDebug($"📌 Always on top restored: {currentSettings.AlwaysOnTop}", "UI");
                 }
 
                 UpdateStatusBar();
