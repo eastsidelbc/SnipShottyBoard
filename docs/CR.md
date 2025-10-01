@@ -515,15 +515,21 @@ When asked to “publish” or “make a release”, Cursor must:
 
 ## Release Log
 
-### v<version> — <YYYY-MM-DD HH:mm> (local)
+### v1.4.0 — 2025-10-01 15:57 (America/Chicago)
 - **Artifacts**
-  - Zip: `publish/SnipShottyBoard_v<version>_win-x64.zip`
-  - Folder: `publish/<version>/win-x64/`
+  - Zip: `publish/SnipShottyBoard_v1.4.0_win-x64.zip`
+  - Folder: `publish/1.4.0/win-x64/`
+  - Exe Size: 161.8 MB
+  - SHA256: `CF14DE4E4E8866F6D01B389097DEE006BA08AB4C80F15F83992DBA79EDBADD29`
 - **Git**
-  - Tag: `v<version>`
-  - Commit: `<short-sha>`
+  - Tag: `v1.4.0`
+  - Commit: `33ed187`
 - **Notes**
-  - Summary: <1–2 lines of what changed/fixed>
+  - Multi-row tab wrapping (Edge-like behavior)
+  - Keyboard arrow navigation across rows (Left/Right/Up/Down/Home/End)
+  - Row-aware drag & drop with blue drop indicator
+  - Docs restructuring: CR.md (normative) vs Dev Notes (implementation)
+  - No horizontal scroll - tabs wrap vertically instead
 
 ---
 
