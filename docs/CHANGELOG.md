@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### ✨ Added
+- **Per-Tab Splitter Persistence**: Each tab now remembers its own Text/Media splitter position independently
+  - Stored as ratio (0.0-1.0) for DPI-safe scaling across window sizes
+  - Saved in `SavedNote.SplitterTextMediaRatio` per tab
+  - Clamped to safe bounds (20%-80%) to prevent panel collapse
+  - See [Dev Note: Splitter & Titlebar](docs/devnotes/2025-10-01-splitter-persist-and-titlebar-buttons.md)
+- **Pin Button (Always on Top)**: New 📌 button in titlebar to toggle `Window.Topmost` 
+  - Visual state indicator: Semi-transparent blue background + accent border when ON
+  - Uses Tag property pattern for persistent visual state (not overridden by hover triggers)
+  - State persists across app restarts
+  - Tooltip updates dynamically: "Always on top: On/Off"
+- **Minimize Button**: New − button in titlebar for quick window minimization
+  - Replaced "📁" logs folder button (relocated to Developer menu 🔧)
+
+### 🔧 Changed
+- **Window Size Persistence**: Window dimensions now save on **every close** (not just when content changes)
+  - Fixes issue where window size was lost on restart if no edits were made
+- **Titlebar Button Layout**: Reordered to group window controls together
+  - **Before**: `[+] [drag] [📝] [📁] [⚙️] [🗑️] [🌙] [?] [🔧] [×]`
+  - **After**: `[+] [drag] [📝] [⚙️] [🗑️] [🌙] [?] [🔧] [📌] [−] [×]`
+- **Developer Menu Tooltip**: Updated to "Developer tools, diagnostics & logs"
+
+### 🐛 Fixed
+- **Pin Button Visual**: Partially fixed visual state persistence issue
+  - **Root cause**: Programmatic `Background` setters were overridden by `HeaderButtonStyle` hover triggers
+  - **Solution**: Tag property pattern (`Tag="Pinned"`) with style trigger that overrides hover state
+  - Visual now persists when mouse moves away (not tied to hover state)
+  - **Known Issue**: Visual contrast may still need improvement for better visibility when ON
+
+### 📚 Docs
+- Created [docs/devnotes/2025-10-01-splitter-persist-and-titlebar-buttons.md](docs/devnotes/2025-10-01-splitter-persist-and-titlebar-buttons.md)
+  - Documents per-tab splitter ratio algorithm and persistence strategy
+  - Explains Tag-based pin button visual pattern and why it works
+  - Full testing acceptance criteria and edge cases
+  - Performance characteristics and limitations
+
+---
+
 ## [1.4.0] - 2025-10-01
 ### 🎉 Multi-Row Tab Wrapping (Major UX Enhancement)
 - **Responsive Tab Strip**: Tabs now automatically wrap into multiple rows when window width is reduced (Edge-like behavior)

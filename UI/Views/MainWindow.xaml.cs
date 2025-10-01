@@ -478,7 +478,11 @@ namespace SnipShottyBoard.UI.Views
                     loggingService.LogDebug($"📌 Always on top: {(newState ? "ON" : "OFF")}", "UI");
                 }
                 
-                UpdatePinButtonVisual(newState);
+                // Defer visual update to avoid conflict with button's active state
+                this.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    UpdatePinButtonVisual(newState);
+                }), System.Windows.Threading.DispatcherPriority.Loaded);
             }
             catch (Exception ex)
             {
@@ -500,7 +504,8 @@ namespace SnipShottyBoard.UI.Views
             }
         }
 
-        // 🎨 Update pin button visual based on state
+        // 🎨 Update pin button visual based on state using Tag property
+        // This triggers the style's Tag="Pinned" trigger for persistent visual state
         private void UpdatePinButtonVisual(bool isPinned)
         {
             try
@@ -509,16 +514,19 @@ namespace SnipShottyBoard.UI.Views
                 {
                     if (isPinned)
                     {
-                        PinButton.Background = (System.Windows.Media.Brush)FindResource("TabBackgroundBrush");
-                        PinButton.BorderBrush = (System.Windows.Media.Brush)FindResource("AccentBrush");
-                        PinButton.BorderThickness = new Thickness(0, 0, 0, 2);
+                        // Set Tag to "Pinned" to trigger the style's visual state
+                        PinButton.Tag = "Pinned";
                         PinButton.ToolTip = "Always on top: On";
+                        
+                        loggingService?.LogDebug("📌 Pin button visual: ON (Tag set to 'Pinned')", "UI");
                     }
                     else
                     {
-                        PinButton.Background = System.Windows.Media.Brushes.Transparent;
-                        PinButton.BorderThickness = new Thickness(0);
+                        // Clear Tag to return to default state
+                        PinButton.Tag = null;
                         PinButton.ToolTip = "Always on top: Off";
+                        
+                        loggingService?.LogDebug("📌 Pin button visual: OFF (Tag cleared)", "UI");
                     }
                 }
             }
@@ -740,8 +748,9 @@ namespace SnipShottyBoard.UI.Views
         {
             try
             {
-                // 💾 Save data if needed
-                if (hasUnsavedChanges) SaveApplicationData();
+                // 💾 ALWAYS save window state (position/size) on close, regardless of content changes
+                SaveApplicationData();
+                loggingService.LogDebug("💾 Window state saved on close");
 
                 // 🛑 Stop and dispose timers
                 autoSaveTimer?.Stop();

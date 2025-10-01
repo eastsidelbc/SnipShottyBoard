@@ -62,7 +62,11 @@ namespace SnipShottyBoard.UI.Views
         public event Action OnDataChanged;
 
         // 📐 Event to notify when splitter ratio changes (for persistence)
+        // Passes the new ratio value to the parent for saving
         public event Action<double> OnSplitterRatioChanged;
+        
+        // 📐 Stored splitter ratio for this specific tab
+        private double storedSplitterRatio = AppConstants.SplitterDefaultRatio;
 
         // 🎛️ Splitter state tracking
         private bool isDraggingSplitter = false;
@@ -88,7 +92,7 @@ namespace SnipShottyBoard.UI.Views
             MediaSectionRow.Height = new GridLength(1, GridUnitType.Star);
         }
 
-        // 📐 Apply saved splitter ratio from settings
+        // 📐 Apply saved splitter ratio for this specific tab
         public void ApplySplitterRatio(double ratio)
         {
             try
@@ -102,23 +106,33 @@ namespace SnipShottyBoard.UI.Views
                     clampedRatio = AppConstants.SplitterDefaultRatio;
                 }
 
+                // Store this tab's ratio
+                storedSplitterRatio = clampedRatio;
+
                 double textStars = clampedRatio;
                 double mediaStars = 1.0 - clampedRatio;
 
                 TextSectionRow.Height = new GridLength(textStars, GridUnitType.Star);
                 MediaSectionRow.Height = new GridLength(mediaStars, GridUnitType.Star);
 
-                System.Diagnostics.Debug.WriteLine($"📐 Splitter ratio restored: {clampedRatio:F2} (Text: {clampedRatio * 100:F0}%, Media: {(1 - clampedRatio) * 100:F0}%)");
+                System.Diagnostics.Debug.WriteLine($"📐 Tab splitter ratio applied: {clampedRatio:F2} (Text: {clampedRatio * 100:F0}%, Media: {(1 - clampedRatio) * 100:F0}%)");
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"⚠️ Error applying splitter ratio: {ex.Message}");
                 // Fall back to default
+                storedSplitterRatio = AppConstants.SplitterDefaultRatio;
                 InitializeSplitterSizing();
             }
         }
+        
+        // 📊 Get this tab's current splitter ratio
+        public double GetStoredSplitterRatio()
+        {
+            return storedSplitterRatio;
+        }
 
-        // 📊 Get current splitter ratio for saving
+        // 📊 Get current splitter ratio for saving (also updates stored ratio)
         public double GetSplitterRatio()
         {
             try
@@ -129,18 +143,23 @@ namespace SnipShottyBoard.UI.Views
 
                 if (total <= 0 || double.IsNaN(total) || double.IsInfinity(total))
                 {
-                    return AppConstants.SplitterDefaultRatio;
+                    return storedSplitterRatio;
                 }
 
                 double ratio = textStars / total;
                 
                 // Clamp to safe bounds
-                return Math.Max(AppConstants.SplitterMinRatio, 
-                               Math.Min(AppConstants.SplitterMaxRatio, ratio));
+                double clampedRatio = Math.Max(AppConstants.SplitterMinRatio, 
+                                              Math.Min(AppConstants.SplitterMaxRatio, ratio));
+                
+                // Update stored ratio
+                storedSplitterRatio = clampedRatio;
+                
+                return clampedRatio;
             }
             catch
             {
-                return AppConstants.SplitterDefaultRatio;
+                return storedSplitterRatio;
             }
         }
 

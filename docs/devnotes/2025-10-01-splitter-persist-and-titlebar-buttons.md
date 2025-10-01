@@ -35,20 +35,21 @@
 
 ### Splitter Persistence Strategy
 
-**Decision:** Store as ratio (0.0-1.0) representing TextSection proportion of total height
+**Decision:** Store as ratio (0.0-1.0) representing TextSection proportion of total height, **per-tab**
 
 **Alternatives Considered:**
 - **Pixel-based storage**: Rejected - breaks across different window sizes and DPIs
 - **StarValue storage**: Rejected - less intuitive for clamping and validation
-- **Per-tab storage**: Rejected - users expect consistent splitter position across all tabs
+- **Single global setting**: Initially implemented, then **changed to per-tab** based on user feedback
 
-**Chosen Approach:**
-- Single global setting: `AppSettings.SplitterTextMediaRatio`
-- Default: 0.5 (50/50 split)
-- Safe clamps: 0.2 minimum (prevent collapse), 0.8 maximum (prevent collapse)
-- Apply on NoteTab initialization after layout is ready
-- Save on splitter drag (debounced to avoid excessive saves)
-- Final save on window closing
+**Chosen Approach (Final):**
+- **Per-tab storage**: Each `SavedNote` stores its own `SplitterTextMediaRatio`
+- **NoteTab internal state**: Each `NoteTab` tracks `storedSplitterRatio` independently
+- Default: 0.5 (50/50 split) from `AppConstants.SplitterDefaultRatio`
+- Safe clamps: 0.2 minimum, 0.8 maximum (prevent panel collapse)
+- Apply on NoteTab initialization after layout is ready (`Dispatcher.BeginInvoke` with `Loaded` priority)
+- Save on splitter drag end (when user releases mouse)
+- Final save on window closing (ensures all tab states persisted)
 
 ### Titlebar Button Layout
 
@@ -71,18 +72,21 @@
 
 ### Visual State Indicator for Pin Button
 
-**Decision:** Use background fill + accent border when TopMost is ON
+**Decision:** Use **Tag property pattern** with style triggers for persistent visual state
 
 **Alternatives Considered:**
+- **Programmatic Background/BorderBrush setters**: Initially implemented, but **overridden by hover triggers** (button appeared blue only while hovering, disappeared when mouse moved away)
 - **Different emoji when ON**: Rejected - too subtle, not clear enough
 - **Rotation animation**: Rejected - distracting, unnecessary complexity
 - **Text label "ON"**: Rejected - clutters compact titlebar
 
-**Chosen Approach:**
-- **OFF state**: Normal header button appearance (transparent background)
-- **ON state**: Background set to `{DynamicResource TabBackgroundBrush}`, accent underline border
+**Chosen Approach (Final):**
+- **Tag-based style trigger**: `HeaderButtonStyle` watches for `Tag="Pinned"`
+- **OFF state**: `Tag=null` → Normal header button (transparent background)
+- **ON state**: `Tag="Pinned"` → Semi-transparent blue background (`#784A90E2`), accent border (1px all sides, 3px bottom)
+- **Why Tag pattern works**: Style triggers **override hover triggers**, while programmatic setters get **overridden by them**
 - Tooltip updates: "Always on top: On" vs "Always on top: Off"
-- Smooth transition (0.2s animation)
+- Visual persists when mouse moves away (not tied to hover state)
 
 ---
 
@@ -163,24 +167,41 @@ private void PinButton_Click(object sender, RoutedEventArgs e)
 }
 ```
 
-**Visual Update:**
+**Visual Update (Tag-based):**
 ```csharp
+// MainWindow.xaml.cs - simplified to just set Tag
 private void UpdatePinButtonVisual(bool isPinned)
 {
     if (isPinned)
     {
-        PinButton.Background = FindResource("TabBackgroundBrush") as Brush;
-        PinButton.BorderBrush = FindResource("AccentBrush") as Brush;
-        PinButton.BorderThickness = new Thickness(0, 0, 0, 2);
+        PinButton.Tag = "Pinned";  // Triggers style
         PinButton.ToolTip = "Always on top: On";
     }
     else
     {
-        PinButton.Background = Brushes.Transparent;
-        PinButton.BorderThickness = new Thickness(0);
+        PinButton.Tag = null;  // Returns to default style
         PinButton.ToolTip = "Always on top: Off";
     }
 }
+```
+
+**Style Definition (DarkTheme.xaml & LightTheme.xaml):**
+```xml
+<Style x:Key="HeaderButtonStyle" TargetType="Button">
+    <!-- ... base setters ... -->
+    <Style.Triggers>
+        <!-- Pin button active state (when Tag="Pinned") -->
+        <Trigger Property="Tag" Value="Pinned">
+            <Setter Property="Background">
+                <Setter.Value>
+                    <SolidColorBrush Color="#784A90E2" /><!-- Semi-transparent blue -->
+                </Setter.Value>
+            </Setter>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderThickness" Value="1,1,1,3" />
+        </Trigger>
+    </Style.Triggers>
+</Style>
 ```
 
 ---
@@ -231,10 +252,10 @@ private void UpdatePinButtonVisual(bool isPinned)
 
 ### Limitations
 
-1. **Single global ratio**: All tabs share same splitter position (not per-tab)
-2. **No animation on restore**: Splitter snaps to position (intentional - avoids flicker)
-3. **No "reset to default" button**: User must manually drag to 50/50
-4. **TopMost limitation**: Windows OS behavior - may not work correctly with some full-screen apps
+1. **No animation on restore**: Splitter snaps to position (intentional - avoids flicker)
+2. **No "reset to default" button**: User must manually drag to 50/50
+3. **TopMost limitation**: Windows OS behavior - may not work correctly with some full-screen apps
+4. **Window size persistence**: Saves width/height on every close (not resize-debounced)
 
 ### Edge Cases Handled
 
@@ -259,7 +280,11 @@ private void UpdatePinButtonVisual(bool isPinned)
 
 ### Known Issues
 
-- None identified during implementation
+1. **Pin Button Visual Not Fully Fixed**: Despite implementing Tag-based style trigger pattern, the pin button visual state is still not displaying as clearly as expected when toggled ON
+   - **Current State**: Semi-transparent blue background (`#784A90E2`) with accent border shows, but may require additional opacity/contrast adjustments
+   - **Expected**: Bright, clearly visible blue fill similar to what appears on hover
+   - **Next Steps**: May need to adjust color opacity (increase alpha from 0x78 to higher value) or use solid color instead of semi-transparent
+   - **Workaround**: Visual does show when hovering, state persists correctly, functionality works as intended
 
 ---
 
@@ -280,13 +305,15 @@ private void UpdatePinButtonVisual(bool isPinned)
 ## References
 
 - **Files Modified**:
-  - `Core/Models/AppSettings.cs` - Added SplitterTextMediaRatio
-  - `Data/AppConstants.cs` - Added splitter ratio constants
-  - `UI/Views/NoteTab.xaml.cs` - Splitter save/load logic
-  - `UI/Views/MainWindow.xaml` - Titlebar button layout
-  - `UI/Views/MainWindow.xaml.cs` - Minimize & pin button handlers
-  - `Resources/Themes/DarkTheme.xaml` - Pin button selected state
-  - `Resources/Themes/LightTheme.xaml` - Pin button selected state
+  - `Core/Models/AppSettings.cs` - Added SplitterTextMediaRatio (now unused, kept for migration)
+  - `Core/Models/SavedNote.cs` - Added SplitterTextMediaRatio (per-tab storage)
+  - `Data/AppConstants.cs` - Added splitter ratio constants (SplitterMinRatio, SplitterMaxRatio, SplitterDefaultRatio)
+  - `UI/Views/NoteTab.xaml.cs` - Splitter save/load logic, OnSplitterRatioChanged event, ApplySplitterRatio/GetSplitterRatio/GetStoredSplitterRatio methods
+  - `UI/TabManager.cs` - Wire up splitter events for all tab creation paths (new, load, duplicate)
+  - `UI/Views/MainWindow.xaml` - Titlebar button layout (removed logs, added pin + minimize)
+  - `UI/Views/MainWindow.xaml.cs` - Minimize & pin button handlers, Tag-based pin visual, window size persistence fix
+  - `Resources/Themes/DarkTheme.xaml` - Pin button Tag="Pinned" trigger
+  - `Resources/Themes/LightTheme.xaml` - Pin button Tag="Pinned" trigger
 
 - **Related CR Sections**:
   - § State & Data Flow (persistence rules)

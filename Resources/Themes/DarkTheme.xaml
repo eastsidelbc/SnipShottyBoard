@@ -320,6 +320,18 @@
         <Setter Property="Height" Value="24" />
         <Setter Property="Padding" Value="4,2" />
         <Setter Property="Margin" Value="2,4" />
+        <Style.Triggers>
+            <!-- 📌 Pin button active state (when Tag="Pinned") -->
+            <Trigger Property="Tag" Value="Pinned">
+                <Setter Property="Background">
+                    <Setter.Value>
+                        <SolidColorBrush Color="#784A90E2" /><!-- Semi-transparent blue -->
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                <Setter Property="BorderThickness" Value="1,1,1,3" />
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
     <!-- 🎨 Edge-like Tab Button Style for Tab Strip -->

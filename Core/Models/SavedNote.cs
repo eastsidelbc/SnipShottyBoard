@@ -85,6 +85,19 @@ namespace SnipShottyBoard.Core.Models
         // This allows us to show "Added: 2 hours ago" under each image for better organization.
         public Dictionary<string, DateTime> ImageTimestamps { get; set; } = new Dictionary<string, DateTime>();
 
+        // 📐 Splitter Position - Text/Media divider ratio for THIS specific tab
+        // 
+        // This stores the position of the splitter between TextSection and MediaSection
+        // as a ratio (0.0 to 1.0) for THIS individual tab only.
+        // 
+        // Each tab can have its own custom splitter position:
+        // - Tab 1 might be 30/70 (more focus on media)
+        // - Tab 2 might be 70/30 (more focus on text)
+        // - Tab 3 might be 50/50 (equal split)
+        // 
+        // Defaults to 0.5 (50/50) if not set.
+        public double SplitterTextMediaRatio { get; set; } = 0.5;
+
         // 📊 Tab Order - The position of this tab in the tab strip
         // 
         // This number determines where this tab appears in the row of tabs.

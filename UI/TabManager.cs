@@ -549,21 +549,18 @@ namespace SnipShottyBoard.UI
                     }
                 };
 
-                // 📐 Wire up splitter ratio persistence
+                // 📐 Wire up splitter ratio persistence (per-tab)
                 noteTab.OnSplitterRatioChanged += (ratio) =>
                 {
                     try
                     {
-                        if (appSettings != null)
-                        {
-                            appSettings.SplitterTextMediaRatio = ratio;
-                            OnSettingsNeedUpdate?.Invoke(); // Trigger save
-                            OnLogDebug?.Invoke($"📐 Splitter ratio updated in settings: {ratio:F2}", string.Empty);
-                        }
+                        // Mark tab as changed to trigger auto-save (per-tab ratio)
+                        OnDataChanged?.Invoke(true);
+                        OnLogDebug?.Invoke($"📐 Tab splitter ratio changed: {ratio:F2}", string.Empty);
                     }
                     catch (Exception ex)
                     {
-                        OnLogError?.Invoke("Error saving splitter ratio", ex);
+                        OnLogError?.Invoke("Error saving tab splitter ratio", ex);
                     }
                 };
 
@@ -598,20 +595,18 @@ namespace SnipShottyBoard.UI
 
                 OnLogDebug?.Invoke("✅ Click handler wired", string.Empty);
 
-                // 📐 Apply saved splitter ratio after layout is ready
+                // 📐 Apply default splitter ratio after layout is ready (new tabs use default)
                 noteTab.Dispatcher.BeginInvoke(new Action(() =>
                 {
                     try
                     {
-                        if (appSettings != null)
-                        {
-                            noteTab.ApplySplitterRatio(appSettings.SplitterTextMediaRatio);
-                            OnLogDebug?.Invoke($"📐 Applied saved splitter ratio: {appSettings.SplitterTextMediaRatio:F2}", string.Empty);
-                        }
+                        double defaultRatio = appSettings?.SplitterTextMediaRatio ?? AppConstants.SplitterDefaultRatio;
+                        noteTab.ApplySplitterRatio(defaultRatio);
+                        OnLogDebug?.Invoke($"📐 Applied default splitter ratio to new tab: {defaultRatio:F2}", string.Empty);
                     }
                     catch (Exception ex)
                     {
-                        OnLogError?.Invoke("Error applying splitter ratio", ex);
+                        OnLogError?.Invoke("Error applying splitter ratio to new tab", ex);
                     }
                 }), System.Windows.Threading.DispatcherPriority.Loaded);
 
@@ -949,21 +944,18 @@ namespace SnipShottyBoard.UI
             // 🔔 Wire up change tracking for auto-save
             newNoteTab.OnDataChanged += () => OnDataChanged?.Invoke(true);
 
-            // 📐 Wire up splitter ratio persistence for duplicated tabs
+            // 📐 Wire up splitter ratio persistence for duplicated tabs (per-tab)
             newNoteTab.OnSplitterRatioChanged += (ratio) =>
             {
                 try
                 {
-                    if (appSettings != null)
-                    {
-                        appSettings.SplitterTextMediaRatio = ratio;
-                        OnSettingsNeedUpdate?.Invoke();
-                        OnLogDebug?.Invoke($"📐 Splitter ratio updated in settings: {ratio:F2}", string.Empty);
-                    }
+                    // Mark tab as changed to trigger auto-save (per-tab ratio)
+                    OnDataChanged?.Invoke(true);
+                    OnLogDebug?.Invoke($"📐 Tab splitter ratio changed: {ratio:F2}", string.Empty);
                 }
                 catch (Exception ex)
                 {
-                    OnLogError?.Invoke("Error saving splitter ratio", ex);
+                    OnLogError?.Invoke("Error saving tab splitter ratio", ex);
                 }
             };
 
@@ -988,16 +980,14 @@ namespace SnipShottyBoard.UI
             tabHeaderPanel.Children.Add(duplicateTab.HeaderButton);
             SelectTab(duplicateTab);
 
-            // 📐 Apply saved splitter ratio after layout is ready
+            // 📐 Copy source tab's splitter ratio to duplicated tab
             newNoteTab.Dispatcher.BeginInvoke(new Action(() =>
             {
                 try
                 {
-                    if (appSettings != null)
-                    {
-                        newNoteTab.ApplySplitterRatio(appSettings.SplitterTextMediaRatio);
-                        OnLogDebug?.Invoke($"📐 Applied saved splitter ratio to duplicated tab: {appSettings.SplitterTextMediaRatio:F2}", string.Empty);
-                    }
+                    double sourceRatio = sourceTab.Content.GetStoredSplitterRatio();
+                    newNoteTab.ApplySplitterRatio(sourceRatio);
+                    OnLogDebug?.Invoke($"📐 Copied splitter ratio to duplicated tab: {sourceRatio:F2}", string.Empty);
                 }
                 catch (Exception ex)
                 {
@@ -1241,21 +1231,18 @@ namespace SnipShottyBoard.UI
                             OnStatusUpdateRequested?.Invoke();
                         };
 
-                        // 📐 Wire up splitter ratio persistence for loaded tabs
+                        // 📐 Wire up splitter ratio persistence for loaded tabs (per-tab)
                         noteTab.OnSplitterRatioChanged += (ratio) =>
                         {
                             try
                             {
-                                if (appSettings != null)
-                                {
-                                    appSettings.SplitterTextMediaRatio = ratio;
-                                    OnSettingsNeedUpdate?.Invoke();
-                                    OnLogDebug?.Invoke($"📐 Splitter ratio updated in settings: {ratio:F2}", string.Empty);
-                                }
+                                // Mark tab as changed to trigger auto-save (per-tab ratio)
+                                OnDataChanged?.Invoke(true);
+                                OnLogDebug?.Invoke($"📐 Tab splitter ratio changed: {ratio:F2}", string.Empty);
                             }
                             catch (Exception ex)
                             {
-                                OnLogError?.Invoke("Error saving splitter ratio", ex);
+                                OnLogError?.Invoke("Error saving tab splitter ratio", ex);
                             }
                         };
 
@@ -1271,16 +1258,14 @@ namespace SnipShottyBoard.UI
                         tabs.Add(customTab);
                         tabHeaderPanel.Children.Add(customTab.HeaderButton);
 
-                        // 📐 Apply saved splitter ratio after layout is ready
+                        // 📐 Apply this tab's saved splitter ratio after layout is ready
                         noteTab.Dispatcher.BeginInvoke(new Action(() =>
                         {
                             try
                             {
-                                if (appSettings != null)
-                                {
-                                    noteTab.ApplySplitterRatio(appSettings.SplitterTextMediaRatio);
-                                    OnLogDebug?.Invoke($"📐 Applied saved splitter ratio to loaded tab: {appSettings.SplitterTextMediaRatio:F2}", string.Empty);
-                                }
+                                double tabRatio = savedNote.SplitterTextMediaRatio;
+                                noteTab.ApplySplitterRatio(tabRatio);
+                                OnLogDebug?.Invoke($"📐 Applied saved splitter ratio to loaded tab '{savedNote.Title}': {tabRatio:F2}", string.Empty);
                             }
                             catch (Exception ex)
                             {
@@ -1317,7 +1302,8 @@ namespace SnipShottyBoard.UI
                 TextContent = tab.Content.TextContent,
                 RichTextContent = tab.Content.RichTextContent,
                 ImageFiles = tab.Content.ImageFiles,
-                ImageTimestamps = tab.Content.ImageTimestamps
+                ImageTimestamps = tab.Content.ImageTimestamps,
+                SplitterTextMediaRatio = tab.Content.GetStoredSplitterRatio() // Per-tab splitter position
             }).ToList();
         }
 
