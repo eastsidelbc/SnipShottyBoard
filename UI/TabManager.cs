@@ -6,7 +6,9 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using SnipShottyBoard.Core.Models;
 using SnipShottyBoard.Data;
+using SnipShottyBoard.UI.Views;
 
 namespace SnipShottyBoard.UI
 {
@@ -27,8 +29,10 @@ namespace SnipShottyBoard.UI
         private Button draggedTab = null;
         private Canvas dragCanvas = null;
         private Border dragVisual = null;
+        private Border dropIndicator = null; // 📍 Drop indicator line
         private int draggedTabOriginalIndex = -1;
         private int dropTargetIndex = -1;
+        private int lastDropTargetIndex = -1; // 🎯 For hysteresis
 
         // 🔕 User Preferences - Settings reference for delete confirmation
         private AppSettings appSettings;
@@ -94,6 +98,17 @@ namespace SnipShottyBoard.UI
                 IsHitTestVisible = false
             };
             
+            // 📍 Create drop indicator line
+            dropIndicator = new Border
+            {
+                Width = 3,
+                Height = 30,
+                Background = new SolidColorBrush(Color.FromRgb(74, 144, 226)), // Blue indicator
+                CornerRadius = new CornerRadius(1.5),
+                Visibility = Visibility.Hidden,
+                Opacity = 0.8
+            };
+            
             // Add to the main window (we'll need to add this to the MainWindow's grid)
             if (Application.Current.MainWindow is MainWindow mainWindow)
             {
@@ -102,6 +117,9 @@ namespace SnipShottyBoard.UI
                 {
                     mainGrid.Children.Add(dragCanvas);
                     Panel.SetZIndex(dragCanvas, 9999); // Ensure it's on top
+                    
+                    // Add drop indicator to canvas
+                    dragCanvas.Children.Add(dropIndicator);
                 }
             }
         }
@@ -175,6 +193,72 @@ namespace SnipShottyBoard.UI
             {
                 Canvas.SetLeft(dragVisual, currentPosition.X - dragVisual.Width / 2);
                 Canvas.SetTop(dragVisual, currentPosition.Y - dragVisual.Height / 2);
+            }
+        }
+
+        // 📍 Update drop indicator position and visibility
+        private void UpdateDropIndicator(int targetIndex)
+        {
+            if (dropIndicator == null || tabHeaderPanel == null) return;
+            
+            try
+            {
+                if (targetIndex < 0 || !isDragging)
+                {
+                    // Hide indicator
+                    dropIndicator.Visibility = Visibility.Hidden;
+                    return;
+                }
+                
+                // Show indicator
+                dropIndicator.Visibility = Visibility.Visible;
+                
+                // Calculate position for drop indicator
+                double indicatorX = 0;
+                
+                if (targetIndex >= tabHeaderPanel.Children.Count)
+                {
+                    // Drop at end - position after last tab
+                    if (tabHeaderPanel.Children.Count > 0)
+                    {
+                        var lastTab = tabHeaderPanel.Children[tabHeaderPanel.Children.Count - 1] as Button;
+                        if (lastTab != null)
+                        {
+                            var lastTabPos = lastTab.TransformToAncestor(dragCanvas).Transform(new Point(0, 0));
+                            indicatorX = lastTabPos.X + lastTab.ActualWidth + 2;
+                        }
+                    }
+                }
+                else if (targetIndex < tabHeaderPanel.Children.Count)
+                {
+                    // Drop before target tab
+                    var targetTab = tabHeaderPanel.Children[targetIndex] as Button;
+                    if (targetTab != null)
+                    {
+                        var targetTabPos = targetTab.TransformToAncestor(dragCanvas).Transform(new Point(0, 0));
+                        indicatorX = targetTabPos.X - 2;
+                    }
+                }
+                
+                // Position the drop indicator
+                Canvas.SetLeft(dropIndicator, indicatorX);
+                
+                // Position vertically aligned with tabs
+                if (tabHeaderPanel.Children.Count > 0)
+                {
+                    var firstTab = tabHeaderPanel.Children[0] as Button;
+                    if (firstTab != null)
+                    {
+                        var tabPos = firstTab.TransformToAncestor(dragCanvas).Transform(new Point(0, 0));
+                        Canvas.SetTop(dropIndicator, tabPos.Y + 1);
+                        dropIndicator.Height = firstTab.ActualHeight - 2;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                OnLogError?.Invoke("Error updating drop indicator", ex);
+                dropIndicator.Visibility = Visibility.Hidden;
             }
         }
 
@@ -256,11 +340,18 @@ namespace SnipShottyBoard.UI
                     dragVisual = null;
                 }
                 
+                // 📍 Hide drop indicator
+                if (dropIndicator != null)
+                {
+                    dropIndicator.Visibility = Visibility.Hidden;
+                }
+                
                 // 🔄 Reset drag state
                 isDragging = false;
                 draggedTab = null;
                 draggedTabOriginalIndex = -1;
                 dropTargetIndex = -1;
+                lastDropTargetIndex = -1;
                 
                 OnLogDebug?.Invoke("🧹 Drag operation cleaned up", string.Empty);
             }
@@ -977,8 +1068,9 @@ namespace SnipShottyBoard.UI
                     var windowPosition = e.GetPosition(Application.Current.MainWindow);
                     UpdateDragVisual(windowPosition);
                     
-                    // 🎯 Find drop target
+                    // 🎯 Find drop target and update indicator
                     dropTargetIndex = FindDropTargetIndex(e.GetPosition(tabHeaderPanel));
+                    UpdateDropIndicator(dropTargetIndex);
                 }
             };
 
