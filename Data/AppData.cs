@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using SnipShottyBoard.Core.Models;
 
 namespace SnipShottyBoard.Data
 {

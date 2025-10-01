@@ -11,7 +11,7 @@ namespace SnipShottyBoard.UI
 
         public bool IsDarkMode => isDarkMode;
 
-        public event Action OnThemeChanged;
+        public event Action? OnThemeChanged;
 
         // 🌙 Toggle between dark and light themes
         public void ToggleTheme()
@@ -32,14 +32,14 @@ namespace SnipShottyBoard.UI
                 System.Diagnostics.Debug.WriteLine($"🎨 Applying {themeName}...");
                 
                 var themeDict = new ResourceDictionary();
-                themeDict.Source = new Uri($"Themes/{themeName}.xaml", UriKind.Relative);
+                themeDict.Source = new Uri($"Resources/Themes/{themeName}.xaml", UriKind.Relative);
 
                 // 🔄 First add the new theme, then remove old ones to avoid resource gaps
                 Application.Current.Resources.MergedDictionaries.Add(themeDict);
                 
                 // 🧠 Remove existing theme dictionaries (but keep the new one we just added)
                 var existingThemes = Application.Current.Resources.MergedDictionaries
-                    .Where(d => d != themeDict && d.Source?.OriginalString?.Contains("Themes/") == true)
+                    .Where(d => d != themeDict && d.Source?.OriginalString?.Contains("Resources/Themes/") == true)
                     .ToList();
                 
                 System.Diagnostics.Debug.WriteLine($"🔄 Removing {existingThemes.Count} existing theme dictionaries");

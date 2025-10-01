@@ -1,4 +1,5 @@
 using System.Windows.Controls;
+using SnipShottyBoard.UI.Views;
 
 namespace SnipShottyBoard.UI
 {

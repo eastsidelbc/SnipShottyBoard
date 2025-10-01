@@ -1,4 +1,4 @@
-﻿<Window x:Class="SnipShottyBoard.MainWindow"
+﻿<Window x:Class="SnipShottyBoard.UI.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:SnipShottyBoard"
@@ -9,7 +9,8 @@
         Background="Transparent"
         WindowStyle="None"
         AllowsTransparency="True"
-        ResizeMode="CanResize">
+        ResizeMode="CanResize"
+        Icon="/assets/app.ico">
 
     <!-- 🎯 Modern Window Chrome for Resizing + Custom Header -->
     <WindowChrome.WindowChrome>
@@ -54,10 +55,12 @@
                     <ColumnDefinition Width="Auto" />  <!-- + button -->
                     <ColumnDefinition Width="*" />     <!-- Draggable area -->
                     <ColumnDefinition Width="Auto" />  <!-- 📝 note windows button -->
+                    <ColumnDefinition Width="Auto" />  <!-- 📁 logs folder button -->
                     <ColumnDefinition Width="Auto" />  <!-- ⚙️ settings button -->
                     <ColumnDefinition Width="Auto" />  <!-- 🗑️ delete button -->
                     <ColumnDefinition Width="Auto" />  <!-- Theme toggle -->
                     <ColumnDefinition Width="Auto" />  <!-- ℹ️ help button -->
+                    <ColumnDefinition Width="Auto" />  <!-- 🔧 developer button -->
                     <ColumnDefinition Width="Auto" />  <!-- × button -->
                 </Grid.ColumnDefinitions>
 
@@ -80,8 +83,16 @@
                         ToolTip="Manage note windows"
                         WindowChrome.IsHitTestVisibleInChrome="True" />
 
-                <!-- ⚙️ Settings Button -->
+                <!-- 📁 Logs Folder Button -->
                 <Button Grid.Column="3" 
+                        Content="📁"
+                        Style="{DynamicResource HeaderButtonStyle}"
+                        Click="LogsFolder_Click"
+                        ToolTip="Open logs folder"
+                        WindowChrome.IsHitTestVisibleInChrome="True" />
+
+                <!-- ⚙️ Settings Button -->
+                <Button Grid.Column="4" 
                         Content="⚙️"
                         Style="{DynamicResource HeaderButtonStyle}"
                         Click="Settings_Click"
@@ -89,7 +100,7 @@
                         WindowChrome.IsHitTestVisibleInChrome="True" />
 
                 <!-- 🗑️ Delete Tab Button -->
-                <Button Grid.Column="4" 
+                <Button Grid.Column="5" 
                         Content="🗑️"
                         Style="{DynamicResource HeaderButtonStyle}"
                         Click="DeleteTab_Click"
@@ -97,7 +108,7 @@
                         WindowChrome.IsHitTestVisibleInChrome="True" />
 
                 <!-- 🌙 Theme Toggle Button -->
-                <Button Grid.Column="5" 
+                <Button Grid.Column="6" 
                         Content="🌙"
                         Style="{DynamicResource HeaderButtonStyle}"
                         Click="ToggleTheme_Click"
@@ -105,15 +116,23 @@
                         WindowChrome.IsHitTestVisibleInChrome="True" />
 
                 <!-- ℹ️ Help Button -->
-                <Button Grid.Column="6" 
+                <Button Grid.Column="7" 
                         Content="?"
                         Style="{DynamicResource HeaderButtonStyle}"
                         Click="Help_Click"
                         ToolTip="Features and shortcuts"
                         WindowChrome.IsHitTestVisibleInChrome="True" />
 
+                <!-- 🔧 Developer Button -->
+                <Button Grid.Column="8" 
+                        Content="🔧"
+                        Style="{DynamicResource HeaderButtonStyle}"
+                        Click="Developer_Click"
+                        ToolTip="Developer tools"
+                        WindowChrome.IsHitTestVisibleInChrome="True" />
+
                 <!-- ❌ Close Button -->
-                <Button Grid.Column="7" 
+                <Button Grid.Column="9" 
                         Content="×"
                         Style="{DynamicResource HeaderButtonStyle}"
                         Click="Close_Click"

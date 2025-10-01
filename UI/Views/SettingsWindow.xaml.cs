@@ -1,9 +1,10 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using SnipShottyBoard.Core.Models;
 using SnipShottyBoard.Data;
 
-namespace SnipShottyBoard.UI
+namespace SnipShottyBoard.UI.Views
 {
     public partial class SettingsWindow : Window
     {

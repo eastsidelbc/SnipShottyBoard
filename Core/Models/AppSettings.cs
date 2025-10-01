@@ -1,4 +1,6 @@
-namespace SnipShottyBoard.Data
+using SnipShottyBoard.Data;
+
+namespace SnipShottyBoard.Core.Models
 {
     // ⚙️ AppSettings - Your Personal Preferences Storage
     // 
@@ -116,7 +118,7 @@ namespace SnipShottyBoard.Data
         // - 100 = Window was 100 pixels from the left edge
         // 
         // This helps restore the window to the exact same spot on your screen.
-        public double WindowLeft { get; set; } = 100;
+        public double WindowLeft { get; set; } = AppConstants.DefaultWindowLeft;
 
         // 📍 Window Y Position - Where your window was vertically
         // 
@@ -128,7 +130,7 @@ namespace SnipShottyBoard.Data
         // - 50 = Window was 50 pixels from the top edge
         // 
         // Combined with WindowLeft, this restores the window to its exact position.
-        public double WindowTop { get; set; } = 100;
+        public double WindowTop { get; set; } = AppConstants.DefaultWindowTop;
         #endregion
 
         #region Tab Settings

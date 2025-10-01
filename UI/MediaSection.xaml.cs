@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using SnipShottyBoard.Core.Managers;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -8,7 +10,6 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Input;
 using SnipShottyBoard.Data;
-using System.Threading.Tasks;
 
 namespace SnipShottyBoard.UI
 {
@@ -88,11 +89,11 @@ namespace SnipShottyBoard.UI
         }
 
         // 🎬 Helper method to create thumbnails that preserves GIF animation
-        private BitmapImage CreateThumbnailBitmap(string imagePath, int maxWidth = 120)
+        private BitmapImage CreateThumbnailBitmap(string imagePath, int maxWidth = SnipShottyBoard.Data.AppConstants.DefaultThumbnailWidth)
         {
             try
             {
-                var extension = System.IO.Path.GetExtension(imagePath).ToLowerInvariant();
+                var extension = Path.GetExtension(imagePath).ToLowerInvariant();
                 var bitmap = new BitmapImage();
                 bitmap.BeginInit();
                 
@@ -133,8 +134,8 @@ namespace SnipShottyBoard.UI
         {
             var container = new Grid
             {
-                Width = 150,
-                MinHeight = 140,
+                Width = SnipShottyBoard.Data.AppConstants.MediaContainerWidth,
+                MinHeight = SnipShottyBoard.Data.AppConstants.MediaContainerMinHeight,
                 Margin = new Thickness(5),
                 Background = Brushes.Transparent
             };
@@ -143,7 +144,7 @@ namespace SnipShottyBoard.UI
             container.Tag = imagePath;
 
             // Add row definitions for image and timestamp
-            container.RowDefinitions.Add(new RowDefinition { Height = new GridLength(120) });
+            container.RowDefinitions.Add(new RowDefinition { Height = new GridLength(SnipShottyBoard.Data.AppConstants.MediaThumbnailHeight) });
             container.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             // 🖼️ Image area
@@ -157,7 +158,7 @@ namespace SnipShottyBoard.UI
             // 🕒 Timestamp footer
             var timestampText = new TextBlock
             {
-                FontSize = 10,
+                FontSize = SnipShottyBoard.Data.AppConstants.SmallFontSize,
                 Foreground = (System.Windows.Media.Brush)FindResource("AppForegroundBrush"),
                 Opacity = 0.7,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -225,7 +226,7 @@ namespace SnipShottyBoard.UI
                     {
                         clickTimer = new System.Windows.Threading.DispatcherTimer
                         {
-                            Interval = TimeSpan.FromMilliseconds(200)
+                            Interval = TimeSpan.FromMilliseconds(SnipShottyBoard.Data.AppConstants.ClickDetectionWindowMs)
                         };
                         clickTimer.Tick += OnClickTimerTick;
                     }
@@ -719,7 +720,8 @@ namespace SnipShottyBoard.UI
             {
                 try
                 {
-                    if (System.IO.File.Exists(imagePath))
+                    // TODO: Move file existence check to DataManager for better layer separation
+                    if (File.Exists(imagePath))
                     {
                         var bitmap = CreateThumbnailBitmap(imagePath);
                         if (bitmap == null) continue; // Skip if thumbnail creation failed
@@ -837,7 +839,8 @@ namespace SnipShottyBoard.UI
             {
                 try
                 {
-                    if (System.IO.File.Exists(imagePath))
+                    // TODO: Move file existence check to DataManager for better layer separation
+                    if (File.Exists(imagePath))
                     {
                         var bitmap = CreateThumbnailBitmap(imagePath);
                         if (bitmap == null) continue; // Skip if thumbnail creation failed
@@ -852,7 +855,8 @@ namespace SnipShottyBoard.UI
                         };
 
                         // 🕒 Use file creation time as timestamp for existing images
-                        var fileInfo = new System.IO.FileInfo(imagePath);
+                        // TODO: Move file info operations to DataManager for better layer separation
+                        var fileInfo = new FileInfo(imagePath);
                         var timestamp = fileInfo.CreationTime;
                         
                         // 🖼️ Add image with file timestamp (don't use current time)
@@ -874,14 +878,27 @@ namespace SnipShottyBoard.UI
         {
             try
             {
+                System.Diagnostics.Debug.WriteLine($"🖼️ ===== MEDIASECTION OPENING IMAGE VIEWER =====");
+                System.Diagnostics.Debug.WriteLine($"🖼️ MediaSection.ShowFullSizeImage() called");
                 System.Diagnostics.Debug.WriteLine($"🖼️ Opening ImageViewer for: {imagePath}");
+                
+                var extension = Path.GetExtension(imagePath).ToLowerInvariant();
+                System.Diagnostics.Debug.WriteLine($"🖼️ File extension: {extension}");
+                
+                if (extension == ".gif")
+                {
+                    System.Diagnostics.Debug.WriteLine($"🎬 MEDIASECTION: This is a GIF file - animation should be preserved");
+                    System.Diagnostics.Debug.WriteLine($"🎬 MEDIASECTION: About to create ImageViewerWindow for GIF");
+                }
                 
                 // 🔍 Find current image index for navigation
                 var currentIndex = imageFiles.IndexOf(imagePath);
                 System.Diagnostics.Debug.WriteLine($"🖼️ Current image index: {currentIndex} of {imageFiles.Count} total images");
                 
                 // 🔗 Create viewer with navigation support
+                System.Diagnostics.Debug.WriteLine($"🖼️ Creating ImageViewerWindow...");
                 var imageViewer = new ImageViewerWindow(imagePath, imageFiles, currentIndex, RemoveImageByPath);
+                System.Diagnostics.Debug.WriteLine($"🖼️ ImageViewerWindow created successfully");
                 
                 // 🎯 Position window to not cover the main app
                 var mainWindow = Application.Current.MainWindow;
@@ -898,7 +915,15 @@ namespace SnipShottyBoard.UI
                     }
                 }
 
+                System.Diagnostics.Debug.WriteLine($"🖼️ About to show ImageViewerWindow...");
                 imageViewer.Show();
+                System.Diagnostics.Debug.WriteLine($"🖼️ ImageViewerWindow.Show() completed");
+                
+                if (extension == ".gif")
+                {
+                    System.Diagnostics.Debug.WriteLine($"🎬 MEDIASECTION: GIF should now be visible and animating in ImageViewerWindow");
+                }
+                System.Diagnostics.Debug.WriteLine($"🖼️ ===== MEDIASECTION OPENING COMPLETE =====");
             }
             catch (Exception ex)
             {
@@ -1055,7 +1080,7 @@ namespace SnipShottyBoard.UI
         // 📋 Check if file is a supported image format
         private bool IsImageFile(string filePath)
         {
-            var extension = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
+            var extension = Path.GetExtension(filePath).ToLowerInvariant();
             return supportedFormats.Contains(extension);
         }
         
@@ -1088,20 +1113,15 @@ namespace SnipShottyBoard.UI
                     {
                         try
                         {
-                            // 📂 Copy file to app images directory
-                            var fileName = System.IO.Path.GetFileName(sourcePath);
-                            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
-                            var extension = System.IO.Path.GetExtension(fileName);
-                            var newFileName = $"dropped_{timestamp}_{fileName}";
+                            // 📂 Copy file using DataManager
+                            var destinationPath = DataManager.CopyDroppedImage(sourcePath);
+                            if (destinationPath == null)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"❌ UI: Failed to copy dropped image: {sourcePath}");
+                                return;
+                            }
                             
-                            var appDataPath = System.IO.Path.Combine(
-                                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), 
-                                "SnipShottyBoard", "images");
-                            
-                            var destinationPath = System.IO.Path.Combine(appDataPath, newFileName);
-                            
-                            // 📋 Copy the file
-                            System.IO.File.Copy(sourcePath, destinationPath, true);
+                            var newFileName = Path.GetFileName(destinationPath);
                             
                             // 🖼️ Add to UI on main thread
                             Application.Current.Dispatcher.Invoke(() =>

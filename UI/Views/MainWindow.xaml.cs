@@ -12,10 +12,13 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
+using SnipShottyBoard.Core.Managers;
+using SnipShottyBoard.Core.Models;
 using SnipShottyBoard.Data;
+using SnipShottyBoard.Infrastructure.Logging;
 using SnipShottyBoard.UI;
 
-namespace SnipShottyBoard
+namespace SnipShottyBoard.UI.Views
 {
     public partial class MainWindow : Window
     {
@@ -92,10 +95,10 @@ namespace SnipShottyBoard
                         LastModified = DateTime.Now,
                         IsActive = true,
                         Notes = legacyData.Notes.ToList(), // Start with all legacy notes
-                        WindowLeft = legacyData.Settings?.WindowLeft ?? 100,
-                        WindowTop = legacyData.Settings?.WindowTop ?? 100,
-                        WindowWidth = legacyData.Settings?.WindowWidth ?? 800,
-                        WindowHeight = legacyData.Settings?.WindowHeight ?? 600
+                        WindowLeft = legacyData.Settings?.WindowLeft ?? SnipShottyBoard.Data.AppConstants.DefaultWindowLeft,
+                        WindowTop = legacyData.Settings?.WindowTop ?? SnipShottyBoard.Data.AppConstants.DefaultWindowTop,
+                        WindowWidth = legacyData.Settings?.WindowWidth ?? SnipShottyBoard.Data.AppConstants.DefaultWindowWidth,
+                        WindowHeight = legacyData.Settings?.WindowHeight ?? SnipShottyBoard.Data.AppConstants.DefaultWindowHeight
                     };
                     
                     // If there was recent meaningful content that's not in legacy, add it
@@ -145,10 +148,10 @@ namespace SnipShottyBoard
                         LastModified = DateTime.Now,
                         IsActive = true,
                         Notes = legacyData.Notes,
-                        WindowLeft = legacyData.Settings?.WindowLeft ?? 100,
-                        WindowTop = legacyData.Settings?.WindowTop ?? 100,
-                        WindowWidth = legacyData.Settings?.WindowWidth ?? 800,
-                        WindowHeight = legacyData.Settings?.WindowHeight ?? 600
+                        WindowLeft = legacyData.Settings?.WindowLeft ?? SnipShottyBoard.Data.AppConstants.DefaultWindowLeft,
+                        WindowTop = legacyData.Settings?.WindowTop ?? SnipShottyBoard.Data.AppConstants.DefaultWindowTop,
+                        WindowWidth = legacyData.Settings?.WindowWidth ?? SnipShottyBoard.Data.AppConstants.DefaultWindowWidth,
+                        WindowHeight = legacyData.Settings?.WindowHeight ?? SnipShottyBoard.Data.AppConstants.DefaultWindowHeight
                     };
                     
                     noteManager.NoteWindows.Add(mainWindow);
@@ -221,10 +224,10 @@ namespace SnipShottyBoard
                     if (WindowData.WindowTop >= 0 && WindowData.WindowTop < SystemParameters.VirtualScreenHeight)
                         this.Top = WindowData.WindowTop;
                     
-                    if (WindowData.WindowWidth > 200 && WindowData.WindowWidth < SystemParameters.VirtualScreenWidth)
+                    if (WindowData.WindowWidth > SnipShottyBoard.Data.AppConstants.MinWindowWidth && WindowData.WindowWidth < SystemParameters.VirtualScreenWidth)
                         this.Width = WindowData.WindowWidth;
-                    
-                    if (WindowData.WindowHeight > 200 && WindowData.WindowHeight < SystemParameters.VirtualScreenHeight)
+
+                    if (WindowData.WindowHeight > SnipShottyBoard.Data.AppConstants.MinWindowHeight && WindowData.WindowHeight < SystemParameters.VirtualScreenHeight)
                         this.Height = WindowData.WindowHeight;
                         
                     loggingService.LogDebug($"🪟 Window positioned at: {this.Left},{this.Top} Size: {this.Width}x{this.Height}");
@@ -245,7 +248,8 @@ namespace SnipShottyBoard
         // 🔧 Initialize all manager instances
         private void InitializeManagers()
         {
-            loggingService.LogDebug("🚀 Starting MainWindow initialization");
+            loggingService.LogApplicationStart();
+            loggingService.LogDebug("🚀 Starting MainWindow initialization", "UI");
 
             // DataManager is now static
             // themeManager already initialized in constructor
@@ -256,7 +260,7 @@ namespace SnipShottyBoard
             helpManager = new HelpManager();
             settingsManager = new SettingsManager();
 
-            loggingService.LogDebug("✅ All managers initialized");
+            loggingService.LogDebug("✅ All managers initialized", "UI");
         }
 
         // ⏰ Setup auto-save and status update timers
@@ -265,7 +269,7 @@ namespace SnipShottyBoard
             // ⏰ Setup auto-save timer (save every 5 seconds if changes exist)
             autoSaveTimer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromSeconds(5)
+                Interval = TimeSpan.FromSeconds(SnipShottyBoard.Data.AppConstants.DefaultAutoSaveIntervalSeconds)
             };
             autoSaveTimer.Tick += (s, e) => {
                 if (hasUnsavedChanges) SaveApplicationData();
@@ -275,12 +279,12 @@ namespace SnipShottyBoard
             // 📊 Setup status bar timer (update every second)
             statusTimer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromSeconds(1)
+                Interval = TimeSpan.FromSeconds(SnipShottyBoard.Data.AppConstants.StatusUpdateIntervalSeconds)
             };
             statusTimer.Tick += (s, e) => UpdateStatusBar();
             statusTimer.Start();
 
-            loggingService.LogDebug("✅ Timers started");
+            loggingService.LogDebug("✅ Timers started", "UI");
         }
 
         // 🔗 Wire up all event handlers
@@ -294,7 +298,7 @@ namespace SnipShottyBoard
             tabManager.OnDataChanged += (hasChanges) => hasUnsavedChanges = hasChanges;
             tabManager.OnStatusUpdateRequested += UpdateStatusBar;
             tabManager.OnLogDebug += (message, _) => loggingService.LogDebug(message);
-            tabManager.OnLogError += loggingService.LogError;
+            tabManager.OnLogError += (message, ex) => loggingService.LogError(message, ex, "Manager");
             tabManager.OnSettingsNeedUpdate += () => {
                 hasUnsavedChanges = true;
                 SaveApplicationData(); // Save immediately when settings change
@@ -331,7 +335,7 @@ namespace SnipShottyBoard
 
             // SettingsManager events
             settingsManager.OnLogDebug += (message) => loggingService.LogDebug(message);
-            settingsManager.OnLogError += loggingService.LogError;
+            settingsManager.OnLogError += (message, ex) => loggingService.LogError(message, ex, "Manager");
             settingsManager.OnResetDeleteConfirmationRequested += () => {
                 tabManager.ResetDeleteConfirmationPreference();
                 loggingService.LogDebug("🔄 Delete confirmation preference reset via settings");
@@ -351,7 +355,7 @@ namespace SnipShottyBoard
                 }
                 catch (Exception ex)
                 {
-                    loggingService.LogError("Error reloading settings after change", ex);
+                    loggingService.LogError("Error reloading settings after change", ex, "UI");
                 }
             };
 
@@ -416,10 +420,67 @@ namespace SnipShottyBoard
         #endregion
 
         #region Button Event Handlers
+        /// <summary>
+        /// Opens developer tools and options
+        /// </summary>
+        private void Developer_Click(object sender, RoutedEventArgs e)
+        {
+            // Show developer menu with options like "Open Logs Folder"
+            var menu = new ContextMenu();
+            
+            var openLogsItem = new MenuItem 
+            { 
+                Header = "📁 Open Logs Folder", 
+                ToolTip = "Open the folder containing application logs" 
+            };
+            openLogsItem.Click += (s, ev) => 
+            {
+                try
+                {
+                    var logsFolder = LoggingService.GetLogsFolder();
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(logsFolder) 
+                    { 
+                        UseShellExecute = true 
+                    });
+                }
+                catch (Exception ex)
+                {
+                    loggingService.LogError("Failed to open logs folder", ex, "UI");
+                }
+            };
+            
+            menu.Items.Add(openLogsItem);
+            menu.PlacementTarget = sender as FrameworkElement;
+            menu.IsOpen = true;
+        }
+
         private void Close_Click(object sender, RoutedEventArgs e) => this.Close();
         private void NewTab_Click(object sender, RoutedEventArgs e) => tabManager.CreateNewTab();
         private void DeleteTab_Click(object sender, RoutedEventArgs e) => tabManager.DeleteCurrentTab();
         private void ToggleTheme_Click(object sender, RoutedEventArgs e) => themeManager.ToggleTheme();
+        
+        /// <summary>
+        /// Opens the application logs folder in Windows Explorer
+        /// </summary>
+        private void LogsFolder_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var logsFolder = LoggingService.GetLogsFolder();
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(logsFolder) 
+                { 
+                    UseShellExecute = true 
+                });
+                loggingService.LogInfo("📁 UI: Opened logs folder from header button", "UI");
+            }
+            catch (Exception ex)
+            {
+                loggingService.LogError("❌ UI: Failed to open logs folder", ex, "UI");
+                // Fallback: show the path to user
+                MessageBox.Show($"Could not open logs folder. Path: {LoggingService.GetLogsFolder()}", 
+                               "Open Logs Folder", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
 
         private void NoteWindows_Click(object sender, RoutedEventArgs e)
         {
@@ -446,7 +507,7 @@ namespace SnipShottyBoard
             }
             catch (Exception ex)
             {
-                loggingService.LogError("Error opening note list window", ex);
+                loggingService.LogError("Error opening note list window", ex, "UI");
             }
         }
 
@@ -557,7 +618,7 @@ namespace SnipShottyBoard
             }
             catch (Exception ex)
             {
-                loggingService.LogError("Error loading app data", ex);
+                loggingService.LogError("Error loading app data", ex, "Data");
                 // Create default settings for fallback
                 currentSettings = new AppSettings();
                 tabManager.UpdateSettings(currentSettings);
@@ -599,7 +660,7 @@ namespace SnipShottyBoard
             }
             catch (Exception ex)
             {
-                loggingService.LogError("Error saving app data", ex);
+                loggingService.LogError("Error saving app data", ex, "Data");
             }
         }
         #endregion
@@ -637,7 +698,7 @@ namespace SnipShottyBoard
             }
             catch (Exception ex)
             {
-                loggingService.LogError("Error during MainWindow cleanup", ex);
+                loggingService.LogError("Error during MainWindow cleanup", ex, "UI");
             }
         }
         #endregion

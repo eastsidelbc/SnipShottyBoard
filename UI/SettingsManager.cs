@@ -1,6 +1,8 @@
 using System;
 using System.Windows;
+using SnipShottyBoard.Core.Models;
 using SnipShottyBoard.Data;
+using SnipShottyBoard.UI.Views;
 
 namespace SnipShottyBoard.UI
 {
@@ -9,19 +11,19 @@ namespace SnipShottyBoard.UI
     {
         #region Static Window Tracking
         // 📊 Track settings windows to prevent multiple instances
-        private static SettingsWindow activeSettingsWindow = null;
+        private static SettingsWindow? activeSettingsWindow = null;
         #endregion
 
         #region Events
         // 🔄 Events for communicating with other managers
-        public event Action<string> OnLogDebug;
-        public event Action<string, Exception> OnLogError;
-        public event Action OnSettingsChanged;
-        public event Action OnResetDeleteConfirmationRequested;
+        public event Action<string>? OnLogDebug;
+        public event Action<string, Exception>? OnLogError;
+        public event Action? OnSettingsChanged;
+        public event Action? OnResetDeleteConfirmationRequested;
         #endregion
 
         #region Fields
-        private AppSettings currentSettings;
+        private AppSettings? currentSettings;
         #endregion
 
         #region Constructor

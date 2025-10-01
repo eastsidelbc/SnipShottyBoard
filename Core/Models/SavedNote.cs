@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace SnipShottyBoard.Data
+namespace SnipShottyBoard.Core.Models
 {
     // 📝 SavedNote - Represents ONE individual note tab
     // 

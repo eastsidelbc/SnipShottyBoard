@@ -2,21 +2,22 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using SnipShottyBoard.Core.Models;
 using SnipShottyBoard.Data;
 
-namespace SnipShottyBoard.Data
+namespace SnipShottyBoard.Core.Managers
 {
     /// <summary>
     /// 📝 Manages multiple note windows like Windows Sticky Notes
     /// </summary>
     public class NoteWindowManager
     {
-        private static NoteWindowManager _instance;
+        private static NoteWindowManager? _instance;
         public static NoteWindowManager Instance => _instance ??= new NoteWindowManager();
 
         public ObservableCollection<NoteWindowData> NoteWindows { get; }
-        public event Action<NoteWindowData> WindowCreated;
-        public event Action<NoteWindowData> WindowClosed;
+        public event Action<NoteWindowData>? WindowCreated;
+        public event Action<NoteWindowData>? WindowClosed;
 
         private NoteWindowManager()
         {
@@ -63,7 +64,7 @@ namespace SnipShottyBoard.Data
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error saving note windows: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"❌ Data: Error saving note windows: {ex.Message}");
             }
         }
 
@@ -80,11 +81,11 @@ namespace SnipShottyBoard.Data
                 }
 
                 // Don't create default window automatically - let the main window handle existing data first
-                System.Diagnostics.Debug.WriteLine($"📥 Loaded {NoteWindows.Count} note windows");
+                System.Diagnostics.Debug.WriteLine($"📥 Data: Loaded {NoteWindows.Count} note windows");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error loading note windows: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"❌ Data: Error loading note windows: {ex.Message}");
                 // Don't create default window on error either
             }
         }
@@ -102,14 +103,14 @@ namespace SnipShottyBoard.Data
     public class NoteWindowData
     {
         public Guid Id { get; set; }
-        public string Title { get; set; }
+        public string Title { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
         public DateTime LastModified { get; set; }
         public bool IsActive { get; set; }
-        public double WindowLeft { get; set; } = 100;
-        public double WindowTop { get; set; } = 100;
-        public double WindowWidth { get; set; } = 800;
-        public double WindowHeight { get; set; } = 600;
+        public double WindowLeft { get; set; } = AppConstants.DefaultWindowLeft;
+        public double WindowTop { get; set; } = AppConstants.DefaultWindowTop;
+        public double WindowWidth { get; set; } = AppConstants.DefaultWindowWidth;
+        public double WindowHeight { get; set; } = AppConstants.DefaultWindowHeight;
         public List<SavedNote> Notes { get; set; } = new List<SavedNote>();
     }
 } 

@@ -8,7 +8,7 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 
-const PROJECT_ROOT = 'C:\\Users\\Jeremy\\Desktop\\SnipShottyBoard';
+const PROJECT_ROOT = process.env.SSB_PROJECT_ROOT ?? 'C:\\Users\\Jeremy\\Desktop\\GitHub\\SnipShottyBoard';
 
 class SnipShottyBoardMCPServer {
   constructor() {

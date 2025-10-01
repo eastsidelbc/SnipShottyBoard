@@ -3,7 +3,9 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using SnipShottyBoard.Core.Managers;
 using SnipShottyBoard.Data;
+using SnipShottyBoard.UI.Views;
 
 namespace SnipShottyBoard.UI
 {

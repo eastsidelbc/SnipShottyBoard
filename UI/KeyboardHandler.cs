@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using SnipShottyBoard.Core.Managers;
 using SnipShottyBoard.Data;
 
 namespace SnipShottyBoard.UI
@@ -184,30 +185,17 @@ namespace SnipShottyBoard.UI
 
         // Note: ShowFullSizeImage removed - MediaSection handles image viewing with proper delete callbacks
 
-        // 💾 Save image from clipboard to file
-        private string SaveImageFromClipboard()
+        // 💾 Save image from clipboard to file using DataManager
+        private string? SaveImageFromClipboard()
         {
             try
             {
                 var imageSource = Clipboard.GetImage();
-                if (imageSource == null) return null;
-
-                // 📁 Generate unique filename
-                var imagesFolder = DataManager.GetImagesFolder();
-                var fileName = $"img_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..8]}.png";
-                var fullPath = System.IO.Path.Combine(imagesFolder, fileName);
-
-                // 💾 Save image to file
-                using var fileStream = new System.IO.FileStream(fullPath, System.IO.FileMode.Create);
-                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
-                encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(imageSource));
-                encoder.Save(fileStream);
-
-                return fullPath;
+                return DataManager.SaveImageFromClipboard(imageSource);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error saving clipboard image: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"❌ UI: Error accessing clipboard image: {ex.Message}");
                 return null;
             }
         }

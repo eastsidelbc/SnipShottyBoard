@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Windows;
+using SnipShottyBoard.Core.Models;
+using SnipShottyBoard.Data;
 
-namespace SnipShottyBoard.Data
+namespace SnipShottyBoard.Core.Managers
 {
     /// <summary>
     /// 📁 Central data management for application data persistence
@@ -51,7 +52,9 @@ namespace SnipShottyBoard.Data
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error saving notes: {ex.Message}");
+                // Use static fallback logging since DataManager shouldn't depend on UI layer
+                // Use minimal fallback logging for Data layer - no dependency on UI LoggingService
+                System.Diagnostics.Debug.WriteLine($"❌ Data: Error saving notes: {ex.Message}");
             }
         }
 
@@ -72,7 +75,7 @@ namespace SnipShottyBoard.Data
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error loading notes: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"❌ Data: Error loading notes: {ex.Message}");
                 return new List<SavedNote>();
             }
         }
@@ -96,7 +99,7 @@ namespace SnipShottyBoard.Data
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error saving note windows: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"❌ Data: Error saving note windows: {ex.Message}");
             }
         }
 
@@ -117,7 +120,7 @@ namespace SnipShottyBoard.Data
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error loading note windows: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"❌ Data: Error loading note windows: {ex.Message}");
                 return new List<NoteWindowData>();
             }
         }
@@ -141,7 +144,7 @@ namespace SnipShottyBoard.Data
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error saving settings: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"❌ Data: Error saving settings: {ex.Message}");
             }
         }
 
@@ -160,7 +163,7 @@ namespace SnipShottyBoard.Data
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error loading settings: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"❌ Data: Error loading settings: {ex.Message}");
                 return new AppSettings();
             }
         }
@@ -186,7 +189,7 @@ namespace SnipShottyBoard.Data
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error saving app data: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"❌ Data: Error saving app data: {ex.Message}");
                 return false;
             }
         }
@@ -208,7 +211,7 @@ namespace SnipShottyBoard.Data
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error loading app data: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"❌ Data: Error loading app data: {ex.Message}");
                 return new AppData(); // Return default data on error
             }
         }
@@ -223,6 +226,150 @@ namespace SnipShottyBoard.Data
         public static string GetImagesFolder()
         {
             return ImagesFolder;
+        }
+
+        /// <summary>
+        /// 📁 Save image from clipboard to managed images folder
+        /// </summary>
+        /// <param name="imageSource">WPF ImageSource from clipboard</param>
+        /// <returns>Full path to saved image or null if failed</returns>
+        public static string? SaveImageFromClipboard(System.Windows.Media.ImageSource imageSource)
+        {
+            try
+            {
+                if (imageSource == null) return null;
+
+                // 📁 Generate unique filename
+                var fileName = $"img_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..8]}.png";
+                var fullPath = Path.Combine(ImagesFolder, fileName);
+
+                // 💾 Save image to file - convert ImageSource to BitmapSource
+                using var fileStream = new FileStream(fullPath, FileMode.Create);
+                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                
+                // Convert ImageSource to BitmapSource if needed
+                if (imageSource is System.Windows.Media.Imaging.BitmapSource bitmapSource)
+                {
+                    encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmapSource));
+                }
+                else
+                {
+                    // Handle other ImageSource types by rendering to RenderTargetBitmap
+                    var renderBitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                        (int)imageSource.Width, (int)imageSource.Height, 96, 96, 
+                        System.Windows.Media.PixelFormats.Pbgra32);
+                    
+                    var visual = new System.Windows.Media.DrawingVisual();
+                    using (var context = visual.RenderOpen())
+                    {
+                        context.DrawImage(imageSource, new System.Windows.Rect(0, 0, imageSource.Width, imageSource.Height));
+                    }
+                    renderBitmap.Render(visual);
+                    encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(renderBitmap));
+                }
+                
+                encoder.Save(fileStream);
+                return fullPath;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Data: Error saving clipboard image: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 📂 Copy dropped image to managed images folder
+        /// </summary>
+        /// <param name="sourcePath">Source image file path</param>
+        /// <returns>Destination path or null if failed</returns>
+        public static string? CopyDroppedImage(string sourcePath)
+        {
+            try
+            {
+                if (!File.Exists(sourcePath)) return null;
+
+                // 📂 Generate timestamped filename
+                var fileName = Path.GetFileName(sourcePath);
+                var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
+                var extension = Path.GetExtension(fileName);
+                var newFileName = $"dropped_{timestamp}_{fileName}";
+                var destinationPath = Path.Combine(ImagesFolder, newFileName);
+
+                // 📋 Copy the file
+                File.Copy(sourcePath, destinationPath, true);
+                return destinationPath;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Data: Error copying dropped image: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 🗑️ Delete image file safely
+        /// </summary>
+        /// <param name="imagePath">Path to image file</param>
+        /// <returns>True if deleted or file didn't exist</returns>
+        public static bool DeleteImage(string imagePath)
+        {
+            try
+            {
+                if (File.Exists(imagePath))
+                {
+                    File.Delete(imagePath);
+                    System.Diagnostics.Debug.WriteLine($"✅ Data: Image deleted: {imagePath}");
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Data: Error deleting image: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 🔍 Check if image file exists and is accessible
+        /// </summary>
+        /// <param name="imagePath">Path to image file</param>
+        /// <returns>True if file exists and is readable</returns>
+        public static bool ValidateImageFile(string imagePath)
+        {
+            try
+            {
+                if (!File.Exists(imagePath)) return false;
+                
+                // Try to read the file to ensure it's accessible
+                using var stream = File.OpenRead(imagePath);
+                return stream.Length > 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 📊 Get image file information safely
+        /// </summary>
+        /// <param name="imagePath">Path to image file</param>
+        /// <returns>Tuple with (exists, size, extension) or null if error</returns>
+        public static (bool exists, long size, string extension)? GetImageInfo(string imagePath)
+        {
+            try
+            {
+                if (!File.Exists(imagePath)) return (false, 0, "");
+                
+                var fileInfo = new FileInfo(imagePath);
+                var extension = Path.GetExtension(imagePath).ToLowerInvariant();
+                return (true, fileInfo.Length, extension);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         /// <summary>
