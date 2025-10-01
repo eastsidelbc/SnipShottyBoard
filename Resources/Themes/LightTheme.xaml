@@ -6,6 +6,7 @@
     <Color x:Key="ForegroundColor">#FF1B2631</Color>  <!-- Darker blue-gray text -->
     <Color x:Key="HeaderColor">#FFC5D9EA</Color>      <!-- Medium blue for header -->
     <Color x:Key="TabColor">#FFE8F0F5</Color>         <!-- Muted light blue for tabs -->
+    <Color x:Key="TabStripColor">#FFF5F8FA</Color>    <!-- Soft off-white for tab strip (visual separation) -->
     <Color x:Key="BorderColor">#FF85A3C1</Color>      <!-- Deeper blue border -->
 
     <!-- 📜 Scrollbar Colors (adapted for light theme) -->
@@ -19,6 +20,8 @@
     <SolidColorBrush x:Key="AppForegroundBrush" Color="{StaticResource ForegroundColor}" />
     <SolidColorBrush x:Key="HeaderBackgroundBrush" Color="{StaticResource HeaderColor}" />
     <SolidColorBrush x:Key="TabBackgroundBrush" Color="{StaticResource TabColor}" />
+    <SolidColorBrush x:Key="TabStripBackground" Color="{StaticResource TabStripColor}" />
+    <SolidColorBrush x:Key="TabStripBorderBrush" Color="{StaticResource BorderColor}" />
     <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
     
     <!-- 🎯 Action Color Brushes -->
@@ -325,7 +328,7 @@
             <Trigger Property="Tag" Value="Pinned">
                 <Setter Property="Background">
                     <Setter.Value>
-                        <SolidColorBrush Color="#784A90E2" /><!-- Semi-transparent blue -->
+                        <SolidColorBrush Color="#4A90E2" /><!-- Solid blue - high contrast -->
                     </Setter.Value>
                 </Setter>
                 <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
