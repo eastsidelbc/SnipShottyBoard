@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Threading.Tasks;
 using System.Windows;
+using SnipShottyBoard.Core.Managers;
 using SnipShottyBoard.Infrastructure.Logging;
 
 namespace SnipShottyBoard
@@ -22,6 +24,30 @@ namespace SnipShottyBoard
             this.DispatcherUnhandledException += OnDispatcherUnhandledException;
             
             loggingService.LogInfo("🚀 Application starting with global exception handling", "Lifecycle");
+            
+            // Schedule orphaned image cleanup (background, after startup)
+            Task.Run(async () =>
+            {
+                try
+                {
+                    // Wait 5 seconds after startup to avoid impacting initial load
+                    await Task.Delay(5000);
+                    
+                    var deletedCount = DataManager.CleanupOrphanedImages();
+                    
+                    if (deletedCount > 0)
+                    {
+                        LoggingService.LogInfoStatic(
+                            $"🗑️ Startup cleanup: Removed {deletedCount} orphaned image(s)", 
+                            "Lifecycle"
+                        );
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LoggingService.LogErrorStatic("Failed to run startup cleanup", ex, "Lifecycle");
+                }
+            });
             
             base.OnStartup(e);
         }

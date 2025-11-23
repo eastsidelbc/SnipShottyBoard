@@ -3,12 +3,15 @@ using System.IO;
 using System.Text.Json;
 using System.Collections.Generic;
 using System.Linq;
+using SnipShottyBoard.Infrastructure.Logging;
+using SnipShottyBoard.Infrastructure.Helpers;
 
 namespace SnipShottyBoard.Core.Managers
 {
     /// <summary>
     /// 💾 Atomic file operations with rolling backups and corruption recovery
     /// Provides production-ready data persistence with safety guarantees
+    /// ✅ Phase 4D P2.3: Migrated to use LoggingService
     /// </summary>
     public static class AtomicFileManager
     {
@@ -74,7 +77,7 @@ namespace SnipShottyBoard.Core.Managers
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Data: AtomicSave failed for {filePath}: {ex.Message}");
+                LoggingService.LogErrorStatic($"AtomicSave failed for {PathSanitizer.SanitizePath(filePath)}", ex, "Data");
                 return false;
             }
         }
@@ -97,12 +100,12 @@ namespace SnipShottyBoard.Core.Managers
                     var result = JsonSerializer.Deserialize<T>(json);
                     if (result != null)
                     {
-                        System.Diagnostics.Debug.WriteLine($"✅ Data: Loaded {filePath} successfully");
+                        LoggingService.LogDebugStatic($"Loaded {PathSanitizer.SanitizePath(filePath)} successfully", "Data");
                         return result;
                     }
                 }
 
-                System.Diagnostics.Debug.WriteLine($"⚠️ Data: Primary file {filePath} corrupted or missing, attempting recovery");
+                LoggingService.LogWarningStatic($"Primary file corrupted or missing, attempting recovery: {PathSanitizer.SanitizePath(filePath)}", "Data");
 
                 // 2. Try backup file
                 var backupPath = $"{filePath}.bak";
@@ -112,7 +115,7 @@ namespace SnipShottyBoard.Core.Managers
                     var result = JsonSerializer.Deserialize<T>(json);
                     if (result != null)
                     {
-                        System.Diagnostics.Debug.WriteLine($"✅ Data: Recovered from backup {backupPath}");
+                        LoggingService.LogInfoStatic($"Recovered from backup: {PathSanitizer.SanitizePath(backupPath)}", "Data");
                         // Restore the backup as the primary file
                         AtomicSave(filePath, result);
                         return result;
@@ -123,21 +126,21 @@ namespace SnipShottyBoard.Core.Managers
                 var recoveredData = TryRollingBackupRecovery<T>(filePath);
                 if (recoveredData != null)
                 {
-                    System.Diagnostics.Debug.WriteLine($"✅ Data: Recovered from rolling backup");
+                    LoggingService.LogInfoStatic($"Recovered from rolling backup for {PathSanitizer.SanitizePath(filePath)}", "Data");
                     // Restore the recovered data as the primary file
                     AtomicSave(filePath, recoveredData);
                     return recoveredData;
                 }
 
                 // 4. All recovery failed, create default
-                System.Diagnostics.Debug.WriteLine($"⚠️ Data: All recovery attempts failed for {filePath}, creating default");
+                LoggingService.LogWarningStatic($"All recovery attempts failed, creating default: {PathSanitizer.SanitizePath(filePath)}", "Data");
                 var defaultData = createDefault();
                 AtomicSave(filePath, defaultData);
                 return defaultData;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Data: LoadWithRecovery failed for {filePath}: {ex.Message}");
+                LoggingService.LogErrorStatic($"LoadWithRecovery failed for {PathSanitizer.SanitizePath(filePath)}", ex, "Data");
                 return createDefault();
             }
         }
@@ -187,7 +190,7 @@ namespace SnipShottyBoard.Core.Managers
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Data: CreateRollingBackup failed: {ex.Message}");
+                LoggingService.LogErrorStatic("CreateRollingBackup failed", ex, "Data");
             }
         }
 
@@ -206,12 +209,12 @@ namespace SnipShottyBoard.Core.Managers
                 foreach (var oldBackup in backupFiles)
                 {
                     File.Delete(oldBackup);
-                    System.Diagnostics.Debug.WriteLine($"🧹 Data: Deleted old backup {Path.GetFileName(oldBackup)}");
+                    LoggingService.LogDebugStatic($"Deleted old backup: {Path.GetFileName(oldBackup)}", "Data");
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Data: CleanupOldBackups failed: {ex.Message}");
+                LoggingService.LogErrorStatic("CleanupOldBackups failed", ex, "Data");
             }
         }
 
@@ -240,7 +243,7 @@ namespace SnipShottyBoard.Core.Managers
                         var result = JsonSerializer.Deserialize<T>(json);
                         if (result != null)
                         {
-                            System.Diagnostics.Debug.WriteLine($"✅ Data: Recovered from rolling backup {Path.GetFileName(backupFile)}");
+                            LoggingService.LogInfoStatic($"Recovered from rolling backup: {Path.GetFileName(backupFile)}", "Data");
                             return result;
                         }
                     }
@@ -250,7 +253,7 @@ namespace SnipShottyBoard.Core.Managers
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Data: TryRollingBackupRecovery failed: {ex.Message}");
+                LoggingService.LogErrorStatic("TryRollingBackupRecovery failed", ex, "Data");
                 return default(T);
             }
         }
@@ -278,7 +281,7 @@ namespace SnipShottyBoard.Core.Managers
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Data: WriteVerificationInfo failed: {ex.Message}");
+                LoggingService.LogErrorStatic("WriteVerificationInfo failed", ex, "Data");
             }
         }
 
@@ -313,7 +316,7 @@ namespace SnipShottyBoard.Core.Managers
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Data: GetBackupInfo failed: {ex.Message}");
+                LoggingService.LogErrorStatic("GetBackupInfo failed", ex, "Data");
                 return new BackupInfo();
             }
         }

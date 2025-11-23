@@ -1,9 +1,11 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using SnipShottyBoard.Core.Managers;
+using SnipShottyBoard.Core.Utils;
 using SnipShottyBoard.Data;
 using SnipShottyBoard.UI.Views;
 
@@ -15,6 +17,10 @@ namespace SnipShottyBoard.UI
     public partial class NoteListWindow : Window
     {
         private readonly NoteWindowManager noteManager;
+        
+        // 💾 Track position trackers for secondary windows (for cleanup)
+        private readonly Dictionary<Guid, WindowPositionTracker> _positionTrackers 
+            = new Dictionary<Guid, WindowPositionTracker>();
 
         public NoteListWindow()
         {
@@ -283,19 +289,31 @@ namespace SnipShottyBoard.UI
                 noteWindow.Show();
                 noteWindow.Activate();
 
-                // 💾 Save window position when it moves/resizes
-                noteWindow.LocationChanged += (s, e) =>
+                // 💾 Set up debounced position tracking (prevents choppy dragging from disk I/O)
+                var tracker = new WindowPositionTracker(noteWindow, () =>
                 {
+                    // This callback runs only after drag/resize stops (debounced)
                     windowData.WindowLeft = noteWindow.Left;
                     windowData.WindowTop = noteWindow.Top;
-                    noteManager.SaveNoteWindows();
-                };
-
-                noteWindow.SizeChanged += (s, e) =>
-                {
                     windowData.WindowWidth = noteWindow.ActualWidth;
                     windowData.WindowHeight = noteWindow.ActualHeight;
+                    
                     noteManager.SaveNoteWindows();
+                });
+                
+                // Store tracker for cleanup
+                _positionTrackers[windowId] = tracker;
+                
+                // Clean up tracker when window closes
+                noteWindow.Closing += (s, e) =>
+                {
+                    if (_positionTrackers.ContainsKey(windowId))
+                    {
+                        var windowTracker = _positionTrackers[windowId];
+                        windowTracker.SaveNow(); // Save immediately before disposing
+                        windowTracker.Dispose();
+                        _positionTrackers.Remove(windowId);
+                    }
                 };
             }
             catch (Exception ex)

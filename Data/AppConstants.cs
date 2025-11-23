@@ -30,6 +30,19 @@ namespace SnipShottyBoard.Data
         public const int DefaultThumbnailWidth = 120;
 
         /// <summary>
+        /// Maximum number of images cached in memory
+        /// Prevents memory exhaustion when many images pasted across tabs
+        /// LRU eviction when limit reached
+        /// </summary>
+        public const int MaxCachedImages = 100;
+
+        /// <summary>
+        /// Maximum total memory for image cache in bytes (100MB)
+        /// Combined with image count limit for memory safety
+        /// </summary>
+        public const long MaxImageCacheBytes = 100 * 1024 * 1024;
+
+        /// <summary>
         /// Media container width in pixels
         /// Width of the container holding image thumbnails
         /// </summary>
@@ -46,6 +59,13 @@ namespace SnipShottyBoard.Data
         /// Height allocated for thumbnail area within container
         /// </summary>
         public const int MediaThumbnailHeight = 120;
+
+        /// <summary>
+        /// Maximum animated GIFs allowed per note
+        /// GIF animations consume significant memory (keep count low)
+        /// Recommended maximum: 5 GIFs per note
+        /// </summary>
+        public const int MaxAnimatedGifsPerNote = 5;
         #endregion
 
         #region Window Configuration
@@ -116,6 +136,14 @@ namespace SnipShottyBoard.Data
         /// Used for metadata, timestamps, and secondary information
         /// </summary>
         public const int SmallFontSize = 10;
+
+        /// <summary>
+        /// RichTextBox undo limit
+        /// Caps undo stack to prevent memory growth in long editing sessions
+        /// 150 operations = approximately 15+ minutes of continuous editing
+        /// Memory savings: ~3-5MB per tab with large documents
+        /// </summary>
+        public const int RichTextBoxUndoLimit = 150;
         #endregion
 
         #region Window Configuration

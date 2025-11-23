@@ -26,6 +26,15 @@ namespace SnipShottyBoard.Core.Models
     // This makes the app remember your preferences between sessions.
     public class AppSettings
     {
+        #region Schema Versioning
+        /// <summary>
+        /// 📌 Schema version for application settings
+        /// ✅ Phase 5 P2: Added for schema versioning and migration support
+        /// Current version: 1 (initial format)
+        /// </summary>
+        public int SettingsVersion { get; set; } = 1;
+        #endregion
+
         #region Appearance Settings
         // 🌙 Theme Preference - Theme name for theming system
         // 

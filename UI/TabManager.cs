@@ -13,8 +13,10 @@ using SnipShottyBoard.UI.Views;
 namespace SnipShottyBoard.UI
 {
     // 🏷️ TabManager - Handles all tab-related operations including drag & drop reordering
-    public class TabManager
+    /// ✅ Phase 4D P2.1: Implemented IDisposable for proper cleanup
+    public class TabManager : IDisposable
     {
+        private bool _disposed = false;
         #region Fields & Properties
         private List<CustomTab> tabs = new List<CustomTab>();
         private CustomTab selectedTab = null;
@@ -67,10 +69,18 @@ namespace SnipShottyBoard.UI
 
         #region Settings Management
         // ⚙️ Update settings reference
-        public void UpdateSettings(AppSettings settings)
+        /// ✅ Phase 4D P2.8: Added null guard
+        public void UpdateSettings(AppSettings? settings)
         {
+            // ✅ Null guard
+            if (settings == null)
+            {
+                OnLogError?.Invoke("UpdateSettings called with null settings", new ArgumentNullException(nameof(settings)));
+                return;
+            }
+            
             this.appSettings = settings;
-            OnLogDebug?.Invoke($"⚙️ TabManager settings updated - ConfirmTabDeletion: {settings?.ConfirmTabDeletion}", string.Empty);
+            OnLogDebug?.Invoke($"⚙️ TabManager settings updated - ConfirmTabDeletion: {settings.ConfirmTabDeletion}", string.Empty);
         }
 
         // 🔄 Reset "don't ask again" preference
@@ -638,8 +648,16 @@ namespace SnipShottyBoard.UI
         }
 
         // 🎯 Selects the specified tab
-        public void SelectTab(CustomTab tab)
+        /// ✅ Phase 4D P2.8: Added null guard
+        public void SelectTab(CustomTab? tab)
         {
+            // ✅ Null guard
+            if (tab == null)
+            {
+                OnLogError?.Invoke("SelectTab called with null tab", new ArgumentNullException(nameof(tab)));
+                return;
+            }
+            
             // 🧠 Skip if already selected (avoid redundant updates)
             if (selectedTab == tab) return;
             
@@ -1578,6 +1596,44 @@ namespace SnipShottyBoard.UI
                 {
                     tab.HeaderButton.Background = Brushes.Transparent;
                 }
+            }
+        }
+        #endregion
+
+        #region IDisposable Implementation
+        /// <summary>
+        /// ✅ Phase 4D P2.1: Dispose pattern for proper cleanup
+        /// </summary>
+        public void Dispose()
+        {
+            if (_disposed) return;
+
+            try
+            {
+                OnLogDebug?.Invoke("🗑️ TabManager disposing...", string.Empty);
+
+                // Clear event subscribers
+                OnDataChanged = null;
+                OnStatusUpdateRequested = null;
+                OnLogDebug = null;
+                OnLogError = null;
+                OnSettingsNeedUpdate = null;
+
+                // Clear tabs (Note: Individual tab disposal would require IDisposable on NoteTab - future enhancement)
+                tabs.Clear();
+                tabHeaderPanel?.Children.Clear();
+
+                // Clear drag state
+                dragCanvas = null;
+                dragVisual = null;
+                dropIndicator = null;
+                draggedTab = null;
+
+                _disposed = true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in TabManager.Dispose: {ex.Message}");
             }
         }
         #endregion

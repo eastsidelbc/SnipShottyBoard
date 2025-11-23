@@ -5,6 +5,94 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+---
+
+## [1.6.0] - 2025-11-23
+### 🚨 Fixed (CRITICAL)
+- **Data Overwrite Bug in Migration Logic**: Fixed dangerous auto-migration logic that could overwrite recent data with stale legacy data
+  - **IMPACT**: Without this fix, app startup could load old `notes.json` data and overwrite `notewindows.json`
+  - **ROOT CAUSE**: `MainWindow.EnsureMainWindowHasData()` compared note counts without checking timestamps
+  - **FIX**: Migration now only occurs on first-ever run when `notewindows.json` doesn't exist
+  - **SAFETY**: Existing data is always trusted and never auto-overwritten
+  - **RECOVERY**: Atomic backups (Phase 4D P2.3) enabled successful data recovery
+  - See [Incident Report: Phase 4 Data Overwrite](devnotes/2025-Phase4-Incident-NoteDataOverwrite.md) for full analysis
+
+### ✨ Added
+- **Automatic Orphaned Image Cleanup**: App now automatically cleans up unused image files on startup
+  - Runs in background 5 seconds after launch (no UI impact)
+  - Only deletes images not referenced in any note AND older than 7 days (grace period)
+  - Prevents disk space waste from deleted/moved images
+  - See [Dev Note: Phase 4D Cleanup & Sanity Pass](devnotes/2025-Phase4d-CleanupAndSanityPass.md)
+
+- **Data Versioning for Future Migrations**: All saved data now includes version fields
+  - `SavedNote.DataVersion` and `AppData.Version` properties added (current: v1)
+  - Load methods detect and log warnings when loading data from newer app versions
+  - Enables safe schema migrations in future releases without data loss
+  - See [Dev Note: Phase 4D Cleanup & Sanity Pass](devnotes/2025-Phase4d-CleanupAndSanityPass.md)
+
+- **Performance Timing Logs**: All critical operations now log execution time
+  - Save/load operations, image cleanup tracked with millisecond precision
+  - Logged to "Perf" category for performance monitoring and diagnostics
+  - Helps identify performance regressions and bottlenecks
+  - See [Dev Note: Phase 4D Cleanup & Sanity Pass](devnotes/2025-Phase4d-CleanupAndSanityPass.md)
+
+### 🔧 Changed
+- **GIF Animation Limit Enforced**: Maximum 5 animated GIFs per note (prevents memory exhaustion)
+  - User-friendly warning dialog explains memory impact
+  - Existing notes with >5 GIFs still load (no retroactive enforcement)
+  - Constant: `AppConstants.MaxAnimatedGifsPerNote = 5`
+  - See [Dev Note: Phase 4D Cleanup & Sanity Pass](devnotes/2025-Phase4d-CleanupAndSanityPass.md)
+
+- **Atomic File Writes**: All data persistence now uses crash-safe atomic operations
+  - Write to temp file → create backup → atomic rename (prevents corruption if crash during save)
+  - Automatic rolling backups (20 most recent saves kept)
+  - Recovery from backup if primary file corrupted
+  - Migrated `SaveNotes()`, `SaveSettings()`, `SaveNoteWindows()` to `AtomicFileManager`
+  - See [Dev Note: Phase 4D Cleanup & Sanity Pass](devnotes/2025-Phase4d-CleanupAndSanityPass.md)
+
+- **Improved Null Safety**: Strategic null guards added to high-risk public methods
+  - `TabManager.SelectTab()`, `TabManager.UpdateSettings()`, `DataManager.SaveNotes()`
+  - Null violations logged with `ArgumentNullException` for diagnostics
+  - Prevents rare NullReferenceException edge cases
+  - See [Dev Note: Phase 4D Cleanup & Sanity Pass](devnotes/2025-Phase4d-CleanupAndSanityPass.md)
+
+- **Event Handler Cleanup**: `TabManager` now implements `IDisposable` for proper resource cleanup
+  - Clears all event subscribers on dispose (prevents memory leaks)
+  - Clears drag state and references
+  - Foundation for comprehensive disposal pattern across managers
+  - See [Dev Note: Phase 4D Cleanup & Sanity Pass](devnotes/2025-Phase4d-CleanupAndSanityPass.md)
+
+### 🔧 Fixed
+- **DialogHelper Nullable Warnings**: Resolved all 6 nullable reference warnings in UI/DialogHelper.cs
+  - Properties initialized to `string.Empty` or made nullable as appropriate
+  - Optional method parameters made explicitly nullable (`Exception?`, `DialogButtonConfig?`)
+  - Zero behavior changes—compile-time safety improvements only
+  - See [Dev Note: Phase 4C.5 Build Fix Audit](devnotes/2025-Phase4c-BuildFixAudit.md)
+
+### 📚 Docs
+- **Phase 4D Cleanup & Sanity Pass**: Completed P2 (Nice to Have) refactoring items
+  - 7 of 8 P2 items implemented (~19 hours of work)
+  - Focus: Future-proofing, defensive coding, performance diagnostics
+  - Zero breaking changes, all improvements additive or internal
+  - Build status: 0 errors, 262 warnings (unchanged)
+  - See [Dev Note: Phase 4D Cleanup & Sanity Pass](devnotes/2025-Phase4d-CleanupAndSanityPass.md)
+
+- **Phase 4C.5 Build Audit**: Comprehensive XAML generation and build system health check
+  - Verified all XAML-generated files (.g.cs) working correctly
+  - Confirmed Build Action metadata correct for all XAML files
+  - Build succeeds with 0 errors, 262 warnings (reduced from 268)
+  - See [Dev Note: Phase 4C.5 Build Fix Audit](devnotes/2025-Phase4c-BuildFixAudit.md)
+
+- **Phase 1 Foundation Setup**: Created documentation infrastructure for comprehensive revamp
+  - Created folder structure: `docs/audit/`, `docs/archive/`, `docs/masterprompts/`, `docs/sessionsummary/`
+  - Created placeholder files: `MASTER_SOT.md`, `SOT_MAP.md`
+  - Created 5 master prompt placeholders for Phase 3
+  - See [Dev Note: Phase 1 Foundation Setup](devnotes/2025-11-20-Phase1-FoundationSetup.md)
+
+---
+
 ## [1.5.0] - 2025-10-01
 ### ✨ Added
 - **Per-Tab Splitter Persistence**: Each tab now remembers its own Text/Media splitter position independently

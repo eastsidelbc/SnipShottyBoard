@@ -30,6 +30,15 @@ namespace SnipShottyBoard.Core.Models
     // Without this, all your notes would disappear every time you close the app.
     public class SavedNote
     {
+        // 📌 Data Version - Format version of this saved note
+        // 
+        // ✅ Phase 4D P2.4: Data versioning for future migrations
+        // This allows the app to detect if a note was saved by a newer or older version
+        // and handle migrations gracefully without data loss.
+        // 
+        // Current version: 1 (initial format)
+        public int DataVersion { get; set; } = 1;
+
         // 🏷️ Tab Title - The name displayed on the tab
         // 
         // This is the text you see on the actual tab button at the top of the app.

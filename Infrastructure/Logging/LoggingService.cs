@@ -203,5 +203,114 @@ namespace SnipShottyBoard.Infrastructure.Logging
                 // Ignore shutdown errors
             }
         }
+
+        #region Static Bridge Methods (for static DataManager)
+        // These methods enable static classes like DataManager to use structured logging
+        // without requiring instance management. This is a pragmatic bridge pattern
+        // until full dependency injection is implemented (Phase 4 P3 item).
+
+        /// <summary>
+        /// Static bridge: Log error with structured data
+        /// Complies with LOGGING_GOVERNANCE.md structured logging requirements
+        /// </summary>
+        public static void LogErrorStatic(string message, Exception ex, string category, object data = null)
+        {
+            try
+            {
+                if (data != null)
+                {
+                    // Serialize structured data to string for Serilog
+                    var dataStr = System.Text.Json.JsonSerializer.Serialize(data);
+                    Logger.ForContext("Category", category)
+                          .ForContext("Data", dataStr)
+                          .Error(ex, message);
+                }
+                else
+                {
+                    Logger.ForContext("Category", category).Error(ex, message);
+                }
+            }
+            catch
+            {
+                // Fallback to Debug.WriteLine
+                System.Diagnostics.Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ❌ {category}: {message}: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Static bridge: Log info with structured data
+        /// </summary>
+        public static void LogInfoStatic(string message, string category, object data = null)
+        {
+            try
+            {
+                if (data != null)
+                {
+                    var dataStr = System.Text.Json.JsonSerializer.Serialize(data);
+                    Logger.ForContext("Category", category)
+                          .ForContext("Data", dataStr)
+                          .Information(message);
+                }
+                else
+                {
+                    Logger.ForContext("Category", category).Information(message);
+                }
+            }
+            catch
+            {
+                System.Diagnostics.Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ℹ️ {category}: {message}");
+            }
+        }
+
+        /// <summary>
+        /// Static bridge: Log debug with structured data
+        /// </summary>
+        public static void LogDebugStatic(string message, string category, object data = null)
+        {
+            try
+            {
+                if (data != null)
+                {
+                    var dataStr = System.Text.Json.JsonSerializer.Serialize(data);
+                    Logger.ForContext("Category", category)
+                          .ForContext("Data", dataStr)
+                          .Debug(message);
+                }
+                else
+                {
+                    Logger.ForContext("Category", category).Debug(message);
+                }
+            }
+            catch
+            {
+                System.Diagnostics.Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] 🐛 {category}: {message}");
+            }
+        }
+
+        /// <summary>
+        /// Static bridge: Log warning with structured data
+        /// </summary>
+        public static void LogWarningStatic(string message, string category, object data = null)
+        {
+            try
+            {
+                if (data != null)
+                {
+                    var dataStr = System.Text.Json.JsonSerializer.Serialize(data);
+                    Logger.ForContext("Category", category)
+                          .ForContext("Data", dataStr)
+                          .Warning(message);
+                }
+                else
+                {
+                    Logger.ForContext("Category", category).Warning(message);
+                }
+            }
+            catch
+            {
+                System.Diagnostics.Debug.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ⚠️ {category}: {message}");
+            }
+        }
+        #endregion
     }
 } 

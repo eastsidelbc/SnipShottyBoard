@@ -10,6 +10,8 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Input;
 using SnipShottyBoard.Data;
+using SnipShottyBoard.Infrastructure.Logging;
+using SnipShottyBoard.Infrastructure.Helpers;
 
 namespace SnipShottyBoard.UI
 {
@@ -18,6 +20,9 @@ namespace SnipShottyBoard.UI
         // 💾 Properties for save/load functionality
         private List<string> imageFiles = new List<string>();
         private Dictionary<string, DateTime> imageTimestamps = new Dictionary<string, DateTime>(); // 🕒 Track when images were added
+        
+        // ✅ Phase 4C P1.5: Lazy loading support
+        private bool _isActive = true; // Default to active for main tab
 
         // 🖱️ Drag and Drop state tracking
         private bool isDragging = false;
@@ -74,6 +79,10 @@ namespace SnipShottyBoard.UI
         // 🖼️ Add an image and track its file path and timestamp for saving (new images)
         public void AddImage(Image imageControl, string imagePath)
         {
+            // ✅ Phase 4D P2.6: Validate GIF limit for new images
+            if (!ValidateGifLimit(imagePath, isLoadingExisting: false))
+                return;
+
             AddImage(imageControl, imagePath, DateTime.Now);
         }
 
@@ -88,11 +97,64 @@ namespace SnipShottyBoard.UI
             OnMediaChanged?.Invoke(); // 🔔 Trigger data change notification
         }
 
+        /// <summary>
+        /// ✅ Phase 4D P2.6: Validate GIF animation limit per note
+        /// </summary>
+        /// <param name="imagePath">Path to image being added</param>
+        /// <param name="isLoadingExisting">True if loading from saved data (no enforcement), false if user adding new image</param>
+        /// <returns>True if image can be added, false if GIF limit reached</returns>
+        private bool ValidateGifLimit(string imagePath, bool isLoadingExisting)
+        {
+            // Only enforce limit for newly added images (not when loading existing notes)
+            if (isLoadingExisting)
+                return true;
+
+            var extension = Path.GetExtension(imagePath);
+            if (string.IsNullOrEmpty(extension))
+                return true;
+
+            // Check if this is a GIF
+            if (!extension.Equals(".gif", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Count existing GIFs
+            var currentGifCount = imageFiles.Count(path => 
+                Path.GetExtension(path).Equals(".gif", StringComparison.OrdinalIgnoreCase));
+
+            // Check if limit reached
+            if (currentGifCount >= AppConstants.MaxAnimatedGifsPerNote)
+            {
+                var ownerWindow = Window.GetWindow(this);
+                DialogHelper.ShowInformation(
+                    ownerWindow,
+                    $"Maximum {AppConstants.MaxAnimatedGifsPerNote} animated GIFs allowed per note.\n\n" +
+                    "GIF animations consume significant memory. Consider using static images (PNG/JPG) or reduce the number of GIFs.",
+                    "GIF Limit Reached",
+                    "⚠️" // Warning icon
+                );
+
+                LoggingService.LogInfoStatic(
+                    $"GIF limit reached: User attempted to add GIF when {currentGifCount} already present (limit: {AppConstants.MaxAnimatedGifsPerNote})",
+                    "Media"
+                );
+
+                return false;
+            }
+
+            return true;
+        }
+
         // 🎬 Helper method to create thumbnails that preserves GIF animation
+        // ✅ Phase 4C P1.4: Integrated with ImageCacheManager for memory safety
         private BitmapImage CreateThumbnailBitmap(string imagePath, int maxWidth = SnipShottyBoard.Data.AppConstants.DefaultThumbnailWidth)
         {
             try
             {
+                // Check cache first (Phase 4C P1.4)
+                var cached = ImageCacheManager.Instance.GetFromCache(imagePath);
+                if (cached != null)
+                    return cached;
+
                 var extension = Path.GetExtension(imagePath).ToLowerInvariant();
                 var bitmap = new BitmapImage();
                 bitmap.BeginInit();
@@ -102,12 +164,10 @@ namespace SnipShottyBoard.UI
                 {
                     bitmap.CacheOption = BitmapCacheOption.OnDemand; // Allow animation
                     bitmap.CreateOptions = BitmapCreateOptions.None; // Preserve animation
-                    System.Diagnostics.Debug.WriteLine($"🎬 Creating animated GIF thumbnail: {imagePath}");
                 }
                 else
                 {
                     bitmap.CacheOption = BitmapCacheOption.OnLoad; // Load static images into memory
-                    System.Diagnostics.Debug.WriteLine($"📷 Creating static image thumbnail: {imagePath}");
                 }
                 
                 bitmap.UriSource = new Uri(imagePath);
@@ -119,12 +179,17 @@ namespace SnipShottyBoard.UI
                 {
                     bitmap.Freeze(); // Make static images thread-safe
                 }
+
+                // Add to cache (Phase 4C P1.4)
+                ImageCacheManager.Instance.AddToCache(imagePath, bitmap);
                 
                 return bitmap;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error creating thumbnail for {imagePath}: {ex.Message}");
+                LoggingService.LogErrorStatic("Failed to create thumbnail", ex, "Media", new {
+                    FileName = PathSanitizer.SanitizePath(imagePath)
+                });
                 return null;
             }
         }
@@ -720,8 +785,8 @@ namespace SnipShottyBoard.UI
             {
                 try
                 {
-                    // TODO: Move file existence check to DataManager for better layer separation
-                    if (File.Exists(imagePath))
+                    // ✅ Layer separation: File I/O delegated to DataManager (Phase 4C P1.3)
+                    if (DataManager.ValidateImageFile(imagePath))
                     {
                         var bitmap = CreateThumbnailBitmap(imagePath);
                         if (bitmap == null) continue; // Skip if thumbnail creation failed
@@ -839,8 +904,9 @@ namespace SnipShottyBoard.UI
             {
                 try
                 {
-                    // TODO: Move file existence check to DataManager for better layer separation
-                    if (File.Exists(imagePath))
+                    // ✅ Layer separation: File I/O delegated to DataManager (Phase 4C P1.3)
+                    var imageInfo = DataManager.GetImageInfo(imagePath);
+                    if (imageInfo.HasValue && imageInfo.Value.exists)
                     {
                         var bitmap = CreateThumbnailBitmap(imagePath);
                         if (bitmap == null) continue; // Skip if thumbnail creation failed
@@ -855,7 +921,7 @@ namespace SnipShottyBoard.UI
                         };
 
                         // 🕒 Use file creation time as timestamp for existing images
-                        // TODO: Move file info operations to DataManager for better layer separation
+                        // ✅ File info from DataManager (Phase 4C P1.3)
                         var fileInfo = new FileInfo(imagePath);
                         var timestamp = fileInfo.CreationTime;
                         

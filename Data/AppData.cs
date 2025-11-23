@@ -21,6 +21,12 @@ namespace SnipShottyBoard.Data
     // This ensures everything persists between app sessions.
     public class AppData
     {
+        // 📌 Data Version - Format version of this app data file
+        // 
+        // ✅ Phase 4D P2.4: Data versioning for future migrations
+        // Current version: 1 (initial format with Notes + Settings)
+        public int Version { get; set; } = 1;
+
         // 📝 Collection of all saved notes/tabs
         // 
         // This list contains every note tab you've created in the app.

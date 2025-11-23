@@ -102,6 +102,13 @@ namespace SnipShottyBoard.Core.Managers
     /// </summary>
     public class NoteWindowData
     {
+        /// <summary>
+        /// 📌 Schema version for this note window data structure
+        /// ✅ Phase 5 P2: Added for schema versioning and migration support
+        /// Current version: 1 (initial format)
+        /// </summary>
+        public int SchemaVersion { get; set; } = 1;
+
         public Guid Id { get; set; }
         public string Title { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }

@@ -14,6 +14,7 @@ using System.Windows.Threading;
 
 using SnipShottyBoard.Core.Managers;
 using SnipShottyBoard.Core.Models;
+using SnipShottyBoard.Core.Utils;
 using SnipShottyBoard.Data;
 using SnipShottyBoard.Infrastructure.Logging;
 using SnipShottyBoard.UI;
@@ -39,11 +40,16 @@ namespace SnipShottyBoard.UI.Views
         private DispatcherTimer statusTimer;
         private bool hasUnsavedChanges = false;
 
+        // 💾 Debounced window position tracker (fixes choppy dragging)
+        private WindowPositionTracker _positionTracker;
+
         // 🪟 Window data for multi-window support
         public NoteWindowData WindowData { get; private set; }
 
         /// <summary>
-        /// 🔄 Ensures main window has note window data (migration from old format if needed)
+        /// 🔄 Ensures main window has note window data
+        /// ✅ FIXED: Removed dangerous auto-migration logic that could overwrite data
+        /// Migration now only occurs on first-ever run when notewindows.json doesn't exist
         /// </summary>
         private NoteWindowData EnsureMainWindowHasData()
         {
@@ -55,91 +61,29 @@ namespace SnipShottyBoard.UI.Views
             var existingWindows = noteManager.GetActiveWindows();
             loggingService?.LogDebug($"🔍 EnsureMainWindowHasData: Found {existingWindows.Count} existing windows");
             
-            // 🔄 Always check for legacy data to compare content
-            loggingService?.LogDebug($"🔍 EnsureMainWindowHasData: Checking for legacy data");
+            // ✅ If we have existing windows, ALWAYS use them (never auto-migrate)
+            if (existingWindows.Any())
+            {
+                loggingService?.LogDebug($"✅ Using existing window: {existingWindows.First().Title}");
+                return existingWindows.First();
+            }
+            
+            // 🔄 Only attempt migration if notewindows.json doesn't exist (first-ever run)
+            loggingService?.LogDebug($"🔍 No existing windows found. Checking for legacy data (first-run migration only)");
             try
             {
                 var legacyData = new DataManager().LoadAppData();
                 
-                // Count meaningful content in legacy data
+                // Check if legacy data has any meaningful content
                 var legacyContentNotes = legacyData?.Notes?.Where(n => 
                     !string.IsNullOrWhiteSpace(n.TextContent) || 
                     (n.ImageFiles != null && n.ImageFiles.Any())).ToList() ?? new List<SavedNote>();
                 
-                // Count meaningful content in current windows
-                var currentContentNotes = existingWindows
-                    .SelectMany(w => w.Notes ?? new List<SavedNote>())
-                    .Where(n => !string.IsNullOrWhiteSpace(n.TextContent) || 
-                               (n.ImageFiles != null && n.ImageFiles.Any()))
-                    .ToList();
-                
-                loggingService?.LogDebug($"🔍 Legacy content: {legacyContentNotes.Count} notes, Current content: {currentContentNotes.Count} notes");
-                
-                // If legacy has significantly more content, perform migration
-                if (legacyContentNotes.Count > currentContentNotes.Count + 1) // Allow for some recent changes
+                if (legacyContentNotes.Any())
                 {
-                    loggingService?.LogDebug($"🔄 Migrating legacy data ({legacyContentNotes.Count} vs {currentContentNotes.Count} notes)");
+                    loggingService?.LogDebug($"🔄 First run: Migrating {legacyContentNotes.Count} notes from legacy format");
                     
-                    // Backup current content that's not empty
-                    var recentContent = currentContentNotes.ToList();
-                    
-                    // Clear existing windows
-                    noteManager.NoteWindows.Clear();
-                    
-                    // Create main window with legacy data
-                    var mainWindow = new NoteWindowData
-                    {
-                        Id = Guid.NewGuid(),
-                        Title = "My Notes",
-                        CreatedAt = DateTime.Now,
-                        LastModified = DateTime.Now,
-                        IsActive = true,
-                        Notes = legacyData.Notes.ToList(), // Start with all legacy notes
-                        WindowLeft = legacyData.Settings?.WindowLeft ?? SnipShottyBoard.Data.AppConstants.DefaultWindowLeft,
-                        WindowTop = legacyData.Settings?.WindowTop ?? SnipShottyBoard.Data.AppConstants.DefaultWindowTop,
-                        WindowWidth = legacyData.Settings?.WindowWidth ?? SnipShottyBoard.Data.AppConstants.DefaultWindowWidth,
-                        WindowHeight = legacyData.Settings?.WindowHeight ?? SnipShottyBoard.Data.AppConstants.DefaultWindowHeight
-                    };
-                    
-                    // If there was recent meaningful content that's not in legacy, add it
-                    foreach (var recentNote in recentContent)
-                    {
-                        var existingNote = mainWindow.Notes.FirstOrDefault(n => n.Title == recentNote.Title);
-                        if (existingNote != null)
-                        {
-                            // Update with recent content if it's more recent
-                            if (!string.IsNullOrWhiteSpace(recentNote.TextContent) && 
-                                recentNote.TextContent != existingNote.TextContent)
-                            {
-                                existingNote.TextContent = recentNote.TextContent;
-                                loggingService?.LogDebug($"🔄 Updated note '{recentNote.Title}' with recent content");
-                            }
-                        }
-                        else
-                        {
-                            // Add completely new recent note
-                            mainWindow.Notes.Add(recentNote);
-                            loggingService?.LogDebug($"🔄 Added recent note '{recentNote.Title}'");
-                        }
-                    }
-                    
-                    noteManager.NoteWindows.Add(mainWindow);
-                    noteManager.SaveNoteWindows();
-                    
-                    loggingService?.LogDebug($"✅ Migration completed with {mainWindow.Notes.Count} total notes");
-                    return mainWindow;
-                }
-                else if (existingWindows.Any())
-                {
-                    // Current windows have sufficient content, use them
-                    loggingService?.LogDebug($"✅ Using existing windows");
-                    return existingWindows.First();
-                }
-                else if (legacyContentNotes.Any())
-                {
-                    // No current windows but legacy has content
-                    loggingService?.LogDebug($"🔄 No current windows, migrating legacy content");
-                    
+                    // Create main window with legacy data (first-run migration only)
                     var mainWindow = new NoteWindowData
                     {
                         Id = Guid.NewGuid(),
@@ -157,24 +101,17 @@ namespace SnipShottyBoard.UI.Views
                     noteManager.NoteWindows.Add(mainWindow);
                     noteManager.SaveNoteWindows();
                     
-                    loggingService?.LogDebug("✅ Migrated legacy data to note window format");
+                    loggingService?.LogDebug($"✅ First-run migration completed with {mainWindow.Notes.Count} notes");
                     return mainWindow;
                 }
             }
             catch (Exception ex)
             {
-                loggingService?.LogDebug($"⚠️ Could not load legacy data for migration: {ex.Message}");
+                loggingService?.LogDebug($"⚠️ Could not load legacy data for first-run migration: {ex.Message}");
             }
             
-            // 🆕 If we have existing windows (even empty), use the first one; otherwise create new
-            if (existingWindows.Any())
-            {
-                loggingService?.LogDebug($"🔄 Using existing window: {existingWindows.First().Title}");
-                return existingWindows.First();
-            }
-            
-            // 🆕 Create new main window as last resort
-            loggingService?.LogDebug($"🆕 Creating new default window");
+            // 🆕 Create new main window (truly first run, no legacy data)
+            loggingService?.LogDebug($"🆕 Creating new default window (no existing data found)");
             return noteManager.CreateNewNoteWindow("My Notes");
         }
 
@@ -186,11 +123,13 @@ namespace SnipShottyBoard.UI.Views
         {
             try
             {
+                // 🔧 Initialize logging FIRST so EnsureMainWindowHasData can log
+                loggingService = new LoggingService();
+                
                 // 🪟 SIMPLE APPROACH: Every window gets note window data (no special cases)
                 WindowData = windowData ?? EnsureMainWindowHasData();
                 
-                // 🎨 Load settings FIRST to get the correct theme before initializing UI
-                loggingService = new LoggingService();
+                // 🎨 Load settings to get the correct theme before initializing UI
                 var settingsToLoad = DataManager.LoadSettings();
                 currentSettings = settingsToLoad;
                 
@@ -231,6 +170,9 @@ namespace SnipShottyBoard.UI.Views
                         this.Height = WindowData.WindowHeight;
                         
                     loggingService.LogDebug($"🪟 Window positioned at: {this.Left},{this.Top} Size: {this.Width}x{this.Height}");
+                    
+                    // 💾 Set up debounced position tracking (prevents choppy dragging from disk I/O)
+                    SetupPositionTracking();
                 }
                 
                 loggingService.LogDebug("🎉 MainWindow initialization completed successfully");
@@ -361,6 +303,29 @@ namespace SnipShottyBoard.UI.Views
             };
 
             loggingService.LogDebug("✅ Event handlers wired");
+        }
+        
+        /// <summary>
+        /// 💾 Set up debounced position tracking for window moves/resizes
+        /// Prevents choppy dragging caused by saving to disk on every pixel move
+        /// </summary>
+        private void SetupPositionTracking()
+        {
+            if (WindowData == null) return;
+            
+            _positionTracker = new WindowPositionTracker(this, () =>
+            {
+                // This callback runs only after drag/resize stops (debounced)
+                WindowData.WindowLeft = this.Left;
+                WindowData.WindowTop = this.Top;
+                WindowData.WindowWidth = this.ActualWidth;
+                WindowData.WindowHeight = this.ActualHeight;
+                
+                NoteWindowManager.Instance.SaveNoteWindows();
+                loggingService?.LogDebug($"💾 Debounced save: Window position {this.Left},{this.Top} Size: {this.Width}x{this.Height}");
+            });
+            
+            loggingService.LogDebug("✅ Position tracking enabled (debounced)");
         }
         #endregion
 
@@ -748,6 +713,15 @@ namespace SnipShottyBoard.UI.Views
         {
             try
             {
+                // 💾 Stop position tracker and force final save
+                if (_positionTracker != null)
+                {
+                    _positionTracker.SaveNow(); // Save immediately before disposing
+                    _positionTracker.Dispose();
+                    _positionTracker = null;
+                    loggingService.LogDebug("✅ Position tracker disposed");
+                }
+                
                 // 💾 ALWAYS save window state (position/size) on close, regardless of content changes
                 SaveApplicationData();
                 loggingService.LogDebug("💾 Window state saved on close");

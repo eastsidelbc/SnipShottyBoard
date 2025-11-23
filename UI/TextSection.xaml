@@ -32,6 +32,7 @@
                         CaretBrush="{DynamicResource AppForegroundBrush}"
                         BorderThickness="0"
                         AcceptsReturn="True"
+                        UndoLimit="150"
                         VerticalScrollBarVisibility="Auto"
                         HorizontalScrollBarVisibility="Disabled"
                         VerticalAlignment="Stretch"

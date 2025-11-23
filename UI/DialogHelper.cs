@@ -60,7 +60,7 @@ namespace SnipShottyBoard.UI
             Window owner,
             string message,
             string title = "Error",
-            Exception exception = null)
+            Exception? exception = null)
         {
             var displayMessage = message;
             if (exception != null)
@@ -130,7 +130,7 @@ namespace SnipShottyBoard.UI
             string icon = "🔧",
             double width = 400,
             double height = 300,
-            DialogButtonConfig buttons = null)
+            DialogButtonConfig? buttons = null)
         {
             // Create the dialog window using UIFactory
             var dialog = UIFactory.CreateDialogWindow(title, icon, content, width, height);
@@ -269,12 +269,12 @@ namespace SnipShottyBoard.UI
     /// </summary>
     public class DialogButton
     {
-        public string Text { get; set; }
+        public string Text { get; set; } = string.Empty;
         public string Style { get; set; } = "SecondaryButtonStyle";
-        public string Tooltip { get; set; }
+        public string Tooltip { get; set; } = string.Empty;
         public bool IsDefault { get; set; }
         public bool IsCancel { get; set; }
-        public object Result { get; set; }
+        public object? Result { get; set; }
     }
 
     /// <summary>
@@ -283,7 +283,7 @@ namespace SnipShottyBoard.UI
     public class CustomDialogResult
     {
         public bool DialogResult { get; set; }
-        public object UserData { get; set; }
+        public object? UserData { get; set; }
     }
 
     /// <summary>
