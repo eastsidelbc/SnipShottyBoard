@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using SnipShottyBoard.Core.Managers;
+using SnipShottyBoard.UI.WindowManagement;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -11,7 +11,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Input;
 using SnipShottyBoard.Data;
 using SnipShottyBoard.Infrastructure.Logging;
-using SnipShottyBoard.Infrastructure.Helpers;
+using SnipShottyBoard.Core.Infrastructure.Utilities;
 
 namespace SnipShottyBoard.UI
 {
@@ -146,7 +146,7 @@ namespace SnipShottyBoard.UI
 
         // 🎬 Helper method to create thumbnails that preserves GIF animation
         // ✅ Phase 4C P1.4: Integrated with ImageCacheManager for memory safety
-        private BitmapImage CreateThumbnailBitmap(string imagePath, int maxWidth = SnipShottyBoard.Data.AppConstants.DefaultThumbnailWidth)
+        private BitmapImage CreateThumbnailBitmap(string imagePath, int maxWidth = SnipShottyBoard.Core.Constants.AppConstants.DefaultThumbnailWidth)
         {
             try
             {
@@ -199,8 +199,8 @@ namespace SnipShottyBoard.UI
         {
             var container = new Grid
             {
-                Width = SnipShottyBoard.Data.AppConstants.MediaContainerWidth,
-                MinHeight = SnipShottyBoard.Data.AppConstants.MediaContainerMinHeight,
+                Width = SnipShottyBoard.Core.Constants.AppConstants.MediaContainerWidth,
+                MinHeight = SnipShottyBoard.Core.Constants.AppConstants.MediaContainerMinHeight,
                 Margin = new Thickness(5),
                 Background = Brushes.Transparent
             };
@@ -209,7 +209,7 @@ namespace SnipShottyBoard.UI
             container.Tag = imagePath;
 
             // Add row definitions for image and timestamp
-            container.RowDefinitions.Add(new RowDefinition { Height = new GridLength(SnipShottyBoard.Data.AppConstants.MediaThumbnailHeight) });
+            container.RowDefinitions.Add(new RowDefinition { Height = new GridLength(SnipShottyBoard.Core.Constants.AppConstants.MediaThumbnailHeight) });
             container.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             // 🖼️ Image area
@@ -223,7 +223,7 @@ namespace SnipShottyBoard.UI
             // 🕒 Timestamp footer
             var timestampText = new TextBlock
             {
-                FontSize = SnipShottyBoard.Data.AppConstants.SmallFontSize,
+                FontSize = SnipShottyBoard.Core.Constants.AppConstants.SmallFontSize,
                 Foreground = (System.Windows.Media.Brush)FindResource("AppForegroundBrush"),
                 Opacity = 0.7,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -291,7 +291,7 @@ namespace SnipShottyBoard.UI
                     {
                         clickTimer = new System.Windows.Threading.DispatcherTimer
                         {
-                            Interval = TimeSpan.FromMilliseconds(SnipShottyBoard.Data.AppConstants.ClickDetectionWindowMs)
+                            Interval = TimeSpan.FromMilliseconds(SnipShottyBoard.Core.Constants.AppConstants.ClickDetectionWindowMs)
                         };
                         clickTimer.Tick += OnClickTimerTick;
                     }

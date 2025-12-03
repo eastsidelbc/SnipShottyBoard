@@ -1,14 +1,14 @@
 READ FIRST:
-- Open docs/CR.md; summarize relevant rules (bullets).
-- List ambiguities/conflicts (or “None”).
-- Confirm: “I will not duplicate CR content in Dev Notes; I will link to it.”
+- Open docs/MASTER_SOT.md and ARCHITECTURE_GOVERNANCE.md; summarize relevant rules (bullets).
+- List ambiguities/conflicts (or "None").
+- Confirm: "I will not duplicate MASTER_SOT content in Dev Notes; I will link to it."
 
 THEN:
-- Create/append today’s Dev Note at docs/devnotes/YYYY-MM-DD-tabs-multiline-wrapping.md (America/Chicago).
-- Add front-matter (Title, Date, Owner, Versions Affected, Links to CR & PR/SHAs).
+- Create/append today's Dev Note at docs/devnotes/YYYY-MM-DD-<kebab-title>.md (America/Chicago).
+- Add front-matter (Title, Date, Owner, Versions Affected, Links to MASTER_SOT/ARCHITECTURE_GOVERNANCE sections & PR/SHAs).
 - Put algorithms, constants (actual numbers), tests in the Dev Note.
-- Update CR.md ONLY if a reusable rule changes; keep it short & normative and link back to the Dev Note.
-- Update CHANGELOG.md ([Unreleased] or new version) with a “Docs” bullet and Dev Note link.
+- Update MASTER_SOT.md or ARCHITECTURE_GOVERNANCE.md ONLY if a reusable rule changes; keep it short & normative and link back to the Dev Note.
+- Update CHANGELOG.md ([Unreleased] or new version) with a "Docs" bullet and Dev Note link.
 
 
 
@@ -17,10 +17,10 @@ THEN:
 
 
 
-CR LINT:
+GOVERNANCE DOCS LINT:
 - Are rules stated as MUST/SHOULD (not tutorials)?
 - Any raw numbers duplicated from code? (Replace with token/constant NAMES.)
-- Any implementation steps/logs in CR? (Move to Dev Note.)
+- Any implementation steps/logs in governance docs? (Move to Dev Note.)
 - Are sections anchorable (e.g., ## Tabs Pattern) with short, testable bullets?
-- Cross-links: CR → latest Dev Note, Dev Note → CR?
-Output fixes or “Looks clean”.
+- Cross-links: MASTER_SOT/ARCHITECTURE_GOVERNANCE → latest Dev Note, Dev Note → governance docs?
+Output fixes or "Looks clean".

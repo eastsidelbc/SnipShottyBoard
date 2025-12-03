@@ -4,8 +4,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using SnipShottyBoard.Core.Managers;
-using SnipShottyBoard.Core.Utils;
+using SnipShottyBoard.UI.WindowManagement;
 using SnipShottyBoard.Data;
 using SnipShottyBoard.UI.Views;
 

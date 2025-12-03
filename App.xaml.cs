@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using System.Windows;
-using SnipShottyBoard.Core.Managers;
+using SnipShottyBoard.UI.WindowManagement;
 using SnipShottyBoard.Infrastructure.Logging;
 
 namespace SnipShottyBoard

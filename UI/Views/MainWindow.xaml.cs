@@ -12,9 +12,9 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
-using SnipShottyBoard.Core.Managers;
+using SnipShottyBoard.UI.WindowManagement;
 using SnipShottyBoard.Core.Models;
-using SnipShottyBoard.Core.Utils;
+using SnipShottyBoard.Core.Constants;
 using SnipShottyBoard.Data;
 using SnipShottyBoard.Infrastructure.Logging;
 using SnipShottyBoard.UI;

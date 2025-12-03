@@ -59,8 +59,8 @@ namespace SnipShottyBoard.UI
         private void SetupWindow()
         {
             // 🎨 Apply theme-aware sizing
-            this.MinWidth = SnipShottyBoard.Data.AppConstants.ImageViewerMinWidth;
-            this.MinHeight = SnipShottyBoard.Data.AppConstants.ImageViewerMinHeight;
+            this.MinWidth = SnipShottyBoard.Core.Constants.AppConstants.ImageViewerMinWidth;
+            this.MinHeight = SnipShottyBoard.Core.Constants.AppConstants.ImageViewerMinHeight;
             
             // 🔑 Handle keyboard shortcuts
             this.KeyDown += (s, e) =>
@@ -378,12 +378,12 @@ namespace SnipShottyBoard.UI
             try
             {
                 // 📺 Get screen dimensions (leave some margin)
-                var screenWidth = SystemParameters.WorkArea.Width * SnipShottyBoard.Data.AppConstants.ScreenUsageRatio; // 90% of screen width
-                var screenHeight = SystemParameters.WorkArea.Height * SnipShottyBoard.Data.AppConstants.ScreenUsageRatio; // 90% of screen height
+                var screenWidth = SystemParameters.WorkArea.Width * SnipShottyBoard.Core.Constants.AppConstants.ScreenUsageRatio; // 90% of screen width
+                var screenHeight = SystemParameters.WorkArea.Height * SnipShottyBoard.Core.Constants.AppConstants.ScreenUsageRatio; // 90% of screen height
 
                 // 🎯 Calculate window chrome overhead
-                var chromeHeight = SnipShottyBoard.Data.AppConstants.WindowChromeHeight; // Title bar + toolbar + status bar
-                var chromeWidth = SnipShottyBoard.Data.AppConstants.WindowChromeWidth; // Side margins
+                var chromeHeight = SnipShottyBoard.Core.Constants.AppConstants.WindowChromeHeight; // Title bar + toolbar + status bar
+                var chromeWidth = SnipShottyBoard.Core.Constants.AppConstants.WindowChromeWidth; // Side margins
 
                 // 📏 Calculate desired window size based on original image size
                 var desiredWindowWidth = bitmap.PixelWidth + chromeWidth;
@@ -400,8 +400,8 @@ namespace SnipShottyBoard.UI
             catch
             {
                 // 🛡️ Fallback to reasonable default size if calculation fails
-                this.Width = SnipShottyBoard.Data.AppConstants.DefaultImageViewerWidth;
-                this.Height = SnipShottyBoard.Data.AppConstants.DefaultImageViewerHeight;
+                this.Width = SnipShottyBoard.Core.Constants.AppConstants.DefaultImageViewerWidth;
+                this.Height = SnipShottyBoard.Core.Constants.AppConstants.DefaultImageViewerHeight;
                 this.WindowStartupLocation = WindowStartupLocation.CenterOwner;
             }
         }
@@ -481,7 +481,7 @@ namespace SnipShottyBoard.UI
                 if (currentImage != null && !string.IsNullOrEmpty(currentImagePath))
                 {
                     var fileInfo = new FileInfo(currentImagePath);
-                    var fileSizeKB = Math.Round(fileInfo.Length / SnipShottyBoard.Data.AppConstants.BytesToKB, 1);
+                    var fileSizeKB = Math.Round(fileInfo.Length / SnipShottyBoard.Core.Constants.AppConstants.BytesToKB, 1);
                     
                     // 📂 File name and path
                     var fileName = Path.GetFileName(currentImagePath);

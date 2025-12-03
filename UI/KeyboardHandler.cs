@@ -3,7 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
-using SnipShottyBoard.Core.Managers;
+using SnipShottyBoard.UI.WindowManagement;
 using SnipShottyBoard.Data;
 
 namespace SnipShottyBoard.UI

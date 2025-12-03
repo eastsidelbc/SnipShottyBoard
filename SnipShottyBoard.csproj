@@ -9,11 +9,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>assets/app.ico</ApplicationIcon>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    
-    <!-- Version Metadata -->
-    <Version>1.6.0</Version>
-    <AssemblyVersion>1.6.0.0</AssemblyVersion>
-    <FileVersion>1.6.0.0</FileVersion>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,7 +20,22 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="SnipShottyBoard.Core\**" />
+    <Compile Remove="SnipShottyBoard.Avalonia\**" />
+    <EmbeddedResource Remove="SnipShottyBoard.Core\**" />
+    <EmbeddedResource Remove="SnipShottyBoard.Avalonia\**" />
+    <None Remove="SnipShottyBoard.Core\**" />
+    <None Remove="SnipShottyBoard.Avalonia\**" />
+    <Page Remove="SnipShottyBoard.Core\**" />
+    <Page Remove="SnipShottyBoard.Avalonia\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Resource Include="assets\app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="SnipShottyBoard.Core\SnipShottyBoard.Core.csproj" />
   </ItemGroup>
 
 </Project>
