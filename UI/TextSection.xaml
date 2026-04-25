@@ -7,9 +7,10 @@
              HorizontalAlignment="Stretch">
     
     <!-- 📝 TEXT SECTION - Self-contained with flexible height -->
-    <Border Background="Transparent"
-            BorderBrush="{DynamicResource AppForegroundBrush}"
-            BorderThickness="0,0,0,0"
+    <Border x:Name="TextBorder"
+            Background="Transparent"
+            BorderBrush="{DynamicResource SubtleDividerBrush}"
+            BorderThickness="1"
             CornerRadius="6,6,0,0"
             VerticalAlignment="Stretch"
             HorizontalAlignment="Stretch">
@@ -19,10 +20,11 @@
             <TextBlock x:Name="PlaceholderText"
                       Text="Take a note..."
                       Foreground="{DynamicResource AppForegroundBrush}"
-                      Opacity="0.5"
-                      FontSize="14"
-                      FontFamily="Segoe UI"
-                      Margin="8"
+                      Opacity="0.35"
+                      FontStyle="Italic"
+                      FontSize="{DynamicResource BodyFontSize}"
+                      FontFamily="{DynamicResource AppFontFamily}"
+                      Margin="12,12,0,0"
                       VerticalAlignment="Top"
                       IsHitTestVisible="False"
                       Visibility="Visible" />
@@ -37,12 +39,14 @@
                         HorizontalScrollBarVisibility="Disabled"
                         VerticalAlignment="Stretch"
                         HorizontalAlignment="Stretch"
-                        FontSize="14"
-                        FontFamily="Segoe UI"
-                        Padding="8"
+                        FontSize="{DynamicResource BodyFontSize}"
+                        FontFamily="{DynamicResource AppFontFamily}"
+                        Padding="12"
                         ScrollViewer.CanContentScroll="True"
                         ScrollViewer.VerticalScrollBarVisibility="Auto"
-                        TextChanged="NoteRichTextBox_TextChanged">
+                        TextChanged="NoteRichTextBox_TextChanged"
+                        GotKeyboardFocus="NoteRichTextBox_GotKeyboardFocus"
+                        LostKeyboardFocus="NoteRichTextBox_LostKeyboardFocus">
                 <RichTextBox.Resources>
                     <!-- 🎨 Default paragraph style to match TextBox appearance -->
                     <Style TargetType="Paragraph">

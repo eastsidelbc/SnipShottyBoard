@@ -6,6 +6,8 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Markup;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 
 namespace SnipShottyBoard.UI
 {
@@ -82,6 +84,48 @@ namespace SnipShottyBoard.UI
         private void NoteRichTextBox_LostFocus(object sender, RoutedEventArgs e)
         {
             UpdatePlaceholderVisibility();
+        }
+
+        // 🎨 Subtle focus border animation — accent border on focus
+        // NOTE: theme brushes are frozen, so we create new unfrozen copies to animate
+        private SolidColorBrush _borderAnimBrush;
+
+        private void NoteRichTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+        {
+            if (TryFindResource("AccentBrush") is SolidColorBrush accentBrush)
+            {
+                if (_borderAnimBrush == null)
+                {
+                    _borderAnimBrush = new SolidColorBrush((Color)TextBorder.BorderBrush.GetValue(SolidColorBrush.ColorProperty));
+                    TextBorder.BorderBrush = _borderAnimBrush;
+                }
+
+                var anim = new ColorAnimation
+                {
+                    To = accentBrush.Color,
+                    Duration = TimeSpan.FromMilliseconds(150)
+                };
+                _borderAnimBrush.BeginAnimation(SolidColorBrush.ColorProperty, anim);
+            }
+        }
+
+        private void NoteRichTextBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+        {
+            if (TryFindResource("SubtleDividerBrush") is SolidColorBrush dividerBrush)
+            {
+                if (_borderAnimBrush == null)
+                {
+                    _borderAnimBrush = new SolidColorBrush((Color)TextBorder.BorderBrush.GetValue(SolidColorBrush.ColorProperty));
+                    TextBorder.BorderBrush = _borderAnimBrush;
+                }
+
+                var anim = new ColorAnimation
+                {
+                    To = dividerBrush.Color,
+                    Duration = TimeSpan.FromMilliseconds(150)
+                };
+                _borderAnimBrush.BeginAnimation(SolidColorBrush.ColorProperty, anim);
+            }
         }
 
         // 🎯 Handle cursor position changes to ensure visibility

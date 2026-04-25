@@ -2,10 +2,31 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="clr-namespace:SnipShottyBoard.UI"
-             Background="{DynamicResource AppBackgroundBrush}">
-    
+             Background="{DynamicResource AppBackgroundBrush}"
+             x:Name="NoteTabRoot">
+
     <!-- 📱 TWO RESIZABLE SECTIONS WITH INTERACTIVE SPLITTER -->
-    <Grid Margin="12" Background="Transparent">
+    <Grid Margin="12"
+          Background="Transparent"
+          x:Name="ContentGrid"
+          Opacity="0">
+        <Grid.Triggers>
+            <!-- 🌟 Fade-in on tab load (200ms) -->
+            <EventTrigger RoutedEvent="Loaded">
+                <BeginStoryboard>
+                    <Storyboard>
+                        <DoubleAnimation Storyboard.TargetName="ContentGrid"
+                                       Storyboard.TargetProperty="Opacity"
+                                       From="0" To="1"
+                                       Duration="0:0:0.2">
+                            <DoubleAnimation.EasingFunction>
+                                <CubicEase EasingMode="EaseOut" />
+                            </DoubleAnimation.EasingFunction>
+                        </DoubleAnimation>
+                    </Storyboard>
+                </BeginStoryboard>
+            </EventTrigger>
+        </Grid.Triggers>
         <Grid.RowDefinitions>
             <!-- 📝 TEXT SECTION - Proportional (starts at 50%) -->
             <RowDefinition Height="*" x:Name="TextSectionRow"/>
@@ -16,11 +37,12 @@
         </Grid.RowDefinitions>
 
         <!-- 📝 TEXT SECTION - TOP HALF (resizable) -->
-        <ui:TextSection x:Name="TextSectionControl" 
-                       Grid.Row="0" />
+        <Border Grid.Row="0" Style="{DynamicResource ContentCardHoverStyle}">
+            <ui:TextSection x:Name="TextSectionControl" />
+        </Border>
 
         <!-- 🎛️ INTERACTIVE SPLITTER - Draggable divider -->
-        <Border Grid.Row="1" 
+        <Border Grid.Row="1"
                 x:Name="SplitterBorder"
                 Height="16"
                 Background="Transparent"
@@ -30,7 +52,7 @@
                 MouseMove="Splitter_MouseMove"
                 MouseLeftButtonUp="Splitter_MouseLeftButtonUp"
                 MouseLeave="Splitter_MouseLeave">
-            
+
             <!-- 🎨 Visual splitter with hover effects -->
             <Grid>
                 <!-- 📏 Main divider line -->
@@ -38,42 +60,50 @@
                           Fill="{DynamicResource AppForegroundBrush}"
                           Opacity="0.2"
                           x:Name="SplitterLine"/>
-                
+
                 <!-- 🎯 Hover indicator (grip dots) -->
                 <StackPanel Orientation="Horizontal"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"
                            x:Name="SplitterGrip"
                            Opacity="0">
-                    <Ellipse Width="4" Height="4" 
-                            Fill="{DynamicResource AppForegroundBrush}" 
+                    <Ellipse Width="4" Height="4"
+                            Fill="{DynamicResource AppForegroundBrush}"
                             Opacity="0.4" Margin="1,0"/>
-                    <Ellipse Width="4" Height="4" 
-                            Fill="{DynamicResource AppForegroundBrush}" 
+                    <Ellipse Width="4" Height="4"
+                            Fill="{DynamicResource AppForegroundBrush}"
                             Opacity="0.4" Margin="1,0"/>
-                    <Ellipse Width="4" Height="4" 
-                            Fill="{DynamicResource AppForegroundBrush}" 
+                    <Ellipse Width="4" Height="4"
+                            Fill="{DynamicResource AppForegroundBrush}"
                             Opacity="0.4" Margin="1,0"/>
-                    <Ellipse Width="4" Height="4" 
-                            Fill="{DynamicResource AppForegroundBrush}" 
+                    <Ellipse Width="4" Height="4"
+                            Fill="{DynamicResource AppForegroundBrush}"
                             Opacity="0.4" Margin="1,0"/>
-                    <Ellipse Width="4" Height="4" 
-                            Fill="{DynamicResource AppForegroundBrush}" 
+                    <Ellipse Width="4" Height="4"
+                            Fill="{DynamicResource AppForegroundBrush}"
                             Opacity="0.4" Margin="1,0"/>
                 </StackPanel>
             </Grid>
 
-            <!-- 🎨 Hover effect triggers -->
+            <!-- 🎨 Hover effect triggers with smooth easing -->
             <Border.Triggers>
                 <EventTrigger RoutedEvent="MouseEnter">
                     <BeginStoryboard>
                         <Storyboard>
                             <DoubleAnimation Storyboard.TargetName="SplitterLine"
                                            Storyboard.TargetProperty="Opacity"
-                                           To="0.5" Duration="0:0:0.2"/>
+                                           To="0.5" Duration="0:0:0.2">
+                                <DoubleAnimation.EasingFunction>
+                                    <CubicEase EasingMode="EaseOut" />
+                                </DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
                             <DoubleAnimation Storyboard.TargetName="SplitterGrip"
                                            Storyboard.TargetProperty="Opacity"
-                                           To="0.8" Duration="0:0:0.2"/>
+                                           To="0.8" Duration="0:0:0.2">
+                                <DoubleAnimation.EasingFunction>
+                                    <CubicEase EasingMode="EaseOut" />
+                                </DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
                         </Storyboard>
                     </BeginStoryboard>
                 </EventTrigger>
@@ -82,10 +112,18 @@
                         <Storyboard>
                             <DoubleAnimation Storyboard.TargetName="SplitterLine"
                                            Storyboard.TargetProperty="Opacity"
-                                           To="0.2" Duration="0:0:0.2"/>
+                                           To="0.2" Duration="0:0:0.2">
+                                <DoubleAnimation.EasingFunction>
+                                    <CubicEase EasingMode="EaseIn" />
+                                </DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
                             <DoubleAnimation Storyboard.TargetName="SplitterGrip"
                                            Storyboard.TargetProperty="Opacity"
-                                           To="0" Duration="0:0:0.2"/>
+                                           To="0" Duration="0:0:0.2">
+                                <DoubleAnimation.EasingFunction>
+                                    <CubicEase EasingMode="EaseIn" />
+                                </DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
                         </Storyboard>
                     </BeginStoryboard>
                 </EventTrigger>
@@ -93,7 +131,8 @@
         </Border>
 
         <!-- 🖼️ MEDIA SECTION - BOTTOM HALF (resizable) -->
-        <ui:MediaSection x:Name="MediaSectionControl" 
-                        Grid.Row="2" />
+        <Border Grid.Row="2" Style="{DynamicResource ContentCardHoverStyle}">
+            <ui:MediaSection x:Name="MediaSectionControl" />
+        </Border>
     </Grid>
 </UserControl>

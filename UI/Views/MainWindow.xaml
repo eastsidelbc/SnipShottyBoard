@@ -5,6 +5,7 @@
         xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
         xmlns:behaviors="http://schemas.microsoft.com/xaml/behaviors"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         Height="500" Width="400" MinHeight="300" MinWidth="250"
         Background="Transparent"
         WindowStyle="None"
@@ -22,14 +23,32 @@
                       CornerRadius="12" />
     </WindowChrome.WindowChrome>
 
-    <!-- 🏗️ Modern Container with Drop Shadow and Rounded Corners -->
-    <Border Background="{DynamicResource AppBackgroundBrush}"
+    <!-- 🏗️ Modern Container with Drop Shadow, Rounded Corners + Fade-In -->
+    <Border x:Name="RootBorder"
+            Background="{DynamicResource AppBackgroundBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="1"
-            CornerRadius="12">
+            CornerRadius="12"
+            Opacity="0">
         <Border.Effect>
             <DropShadowEffect Color="Black" Direction="270" ShadowDepth="4" Opacity="0.6" BlurRadius="12"/>
         </Border.Effect>
+        <Border.Triggers>
+            <!-- 🌟 Fade-in on load (300ms) -->
+            <EventTrigger RoutedEvent="Loaded">
+                <BeginStoryboard>
+                    <Storyboard>
+                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                       From="0" To="1"
+                                       Duration="0:0:0.3">
+                            <DoubleAnimation.EasingFunction>
+                                <CubicEase EasingMode="EaseOut" />
+                            </DoubleAnimation.EasingFunction>
+                        </DoubleAnimation>
+                    </Storyboard>
+                </BeginStoryboard>
+            </EventTrigger>
+        </Border.Triggers>
         
         <Grid>
             <Grid.RowDefinitions>
@@ -128,7 +147,7 @@
                 <Button x:Name="PinButton"
                         Grid.Column="8" 
                         Content="📌"
-                        Style="{DynamicResource HeaderButtonStyle}"
+                        Style="{DynamicResource HeaderPinButtonStyle}"
                         Click="Pin_Click"
                         ToolTip="Always on top: Off"
                         WindowChrome.IsHitTestVisibleInChrome="True" />
@@ -146,7 +165,7 @@
                 <!-- ❌ Close Button -->
                 <Button Grid.Column="10" 
                         Content="×"
-                        Style="{DynamicResource HeaderButtonStyle}"
+                        Style="{DynamicResource HeaderCloseButtonStyle}"
                         Click="Close_Click"
                         ToolTip="Close"
                         FontSize="16"
@@ -154,17 +173,19 @@
                 </Grid>
             </Border>
 
-            <!-- 📑 Tab Strip (Below Header) - Multi-Row Wrapping with Visual Separation -->
+            <!-- 📑 Tab Strip (Below Header) - Pill Container -->
             <Border Grid.Row="1"
-                    Background="{DynamicResource TabStripBackground}"
-                    BorderBrush="{DynamicResource TabStripBorderBrush}"
-                    BorderThickness="0,0,0,1">
-                
+                    Background="{DynamicResource SubtleDividerBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,0,1"
+                    CornerRadius="8"
+                    Margin="4,0,4,2">
+
                 <ScrollViewer Background="Transparent"
                               MaxHeight="200"
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
-                    
+
                     <!-- 🏷️ Custom Tab Header Panel with Multi-Row Wrapping -->
                     <WrapPanel x:Name="TabHeaderPanel"
                                Orientation="Horizontal"
@@ -174,14 +195,18 @@
             </Border>
 
             <!-- 📝 Main Content Area (Tab Content) -->
-            <Border Grid.Row="2" 
-                    Background="{DynamicResource AppBackgroundBrush}">
-                
-                <!-- 🔗 Tab Content Display -->
-                <ContentPresenter x:Name="TabContentArea"
-                                  VerticalAlignment="Stretch"
-                                  HorizontalAlignment="Stretch" />
-            </Border>
+            <materialDesign:Card Grid.Row="2"
+                                 UniformCornerRadius="8"
+                                 Margin="4,0,4,2"
+                                 Background="{DynamicResource CardBackgroundBrush}">
+                <Border>
+
+                    <!-- 🔗 Tab Content Display -->
+                    <ContentPresenter x:Name="TabContentArea"
+                                      VerticalAlignment="Stretch"
+                                      HorizontalAlignment="Stretch" />
+                </Border>
+            </materialDesign:Card>
 
             <!-- 📊 Modern Status Bar with Rounded Bottom Corners -->
             <Border Grid.Row="3" 

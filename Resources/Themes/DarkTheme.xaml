@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
     
     <!-- 🌙 Blue Dark Theme Colors -->
     <Color x:Key="BackgroundColor">#FF1E2A3A</Color>  <!-- Dark blue-gray background -->
@@ -337,42 +338,35 @@
         </Style.Triggers>
     </Style>
 
-    <!-- 🎨 Edge-like Tab Button Style for Tab Strip -->
+    <!-- 🏷️ Floating Tab Pill Style -->
     <Style x:Key="TabButtonStyle" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="{DynamicResource SubtleDividerBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource AppForegroundBrush}" />
         <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Cursor" Value="Arrow" />
-        <Setter Property="Padding" Value="12,6" />
-        <Setter Property="Margin" Value="1,0" />
+        <Setter Property="Padding" Value="16,6" />
+        <Setter Property="Margin" Value="0,0,2,0" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Grid>
-                        <!-- Main tab border with rounded top corners -->
+                        <!-- Pill-shaped border with fully rounded corners -->
                         <Border x:Name="TabBorder"
                                 Background="{TemplateBinding Background}"
-                                BorderBrush="Transparent"
-                                BorderThickness="0"
-                                CornerRadius="3,3,0,0"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="16"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center" />
                         </Border>
-                        
-                        <!-- Active tab underline indicator -->
-                        <Border x:Name="AccentUnderline"
-                                Height="2"
-                                VerticalAlignment="Bottom"
-                                Background="{DynamicResource AccentBrush}"
-                                CornerRadius="1"
-                                Visibility="Hidden"
-                                Margin="2,0,2,0" />
                     </Grid>
-                    
+
                     <ControlTemplate.Triggers>
-                        <!-- Hover State -->
+                        <!-- Hover State (inactive tab) -->
                         <Trigger Property="IsMouseOver" Value="True">
                             <Trigger.EnterActions>
                                 <BeginStoryboard>
@@ -380,7 +374,7 @@
                                         <ColorAnimation Storyboard.TargetName="TabBorder"
                                                       Storyboard.TargetProperty="Background.Color"
                                                       To="#15FFFFFF"
-                                                      Duration="0:0:0.2" />
+                                                      Duration="0:0:0.15" />
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.EnterActions>
@@ -390,12 +384,12 @@
                                         <ColorAnimation Storyboard.TargetName="TabBorder"
                                                       Storyboard.TargetProperty="Background.Color"
                                                       To="Transparent"
-                                                      Duration="0:0:0.3" />
+                                                      Duration="0:0:0.2" />
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.ExitActions>
                         </Trigger>
-                        
+
                         <!-- Pressed State -->
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="TabBorder" Property="Background">
@@ -404,15 +398,15 @@
                                 </Setter.Value>
                             </Setter>
                         </Trigger>
-                        
-                        <!-- Selected State (using Tag property to identify active tab) -->
+
+                        <!-- Selected/Active State — accent glow background + border -->
                         <Trigger Property="Tag" Value="Selected">
-                            <Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource TabBackgroundBrush}" />
-                            <Setter TargetName="AccentUnderline" Property="Visibility" Value="Visible" />
-                            <Setter Property="FontWeight" Value="Medium" />
+                            <Setter Property="Background" Value="{DynamicResource TabActiveGlowBrush}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
                         </Trigger>
-                        
-                        <!-- Combined Selected + Hover -->
+
+                        <!-- Combined Selected + Hover — slightly brighter glow -->
                         <MultiTrigger>
                             <MultiTrigger.Conditions>
                                 <Condition Property="Tag" Value="Selected" />
@@ -423,8 +417,8 @@
                                     <Storyboard>
                                         <ColorAnimation Storyboard.TargetName="TabBorder"
                                                       Storyboard.TargetProperty="Background.Color"
-                                                      To="#35404F"
-                                                      Duration="0:0:0.2" />
+                                                      To="#504A90E2"
+                                                      Duration="0:0:0.15" />
                                     </Storyboard>
                                 </BeginStoryboard>
                             </MultiTrigger.EnterActions>
@@ -433,8 +427,8 @@
                                     <Storyboard>
                                         <ColorAnimation Storyboard.TargetName="TabBorder"
                                                       Storyboard.TargetProperty="Background.Color"
-                                                      To="#243447"
-                                                      Duration="0:0:0.3" />
+                                                      To="#404A90E2"
+                                                      Duration="0:0:0.2" />
                                     </Storyboard>
                                 </BeginStoryboard>
                             </MultiTrigger.ExitActions>
@@ -452,6 +446,37 @@
         <Setter Property="Foreground" Value="{StaticResource AppForegroundBrush}" />
         <Setter Property="FontSize" Value="12" />
         <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <!-- ✨ Header Close Button — red glow on hover -->
+    <Style x:Key="HeaderCloseButtonStyle" TargetType="Button" BasedOn="{StaticResource HeaderButtonStyle}">
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                <Setter Property="Effect" Value="{DynamicResource DangerGlow}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ✨ Header Pin Button — accent glow when active -->
+    <Style x:Key="HeaderPinButtonStyle" TargetType="Button" BasedOn="{StaticResource HeaderButtonStyle}">
+        <Style.Triggers>
+            <Trigger Property="Tag" Value="Pinned">
+                <Setter Property="Effect" Value="{DynamicResource ActiveGlow}" />
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Effect" Value="{DynamicResource HoverGlow}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ✨ Card Hover Style — subtle scale + glow on hover -->
+    <Style x:Key="ContentCardHoverStyle" TargetType="Border" BasedOn="{StaticResource ContentCardStyle}">
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Effect" Value="{DynamicResource HoverGlow}" />
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
     <!-- 🔘 Modern Rounded Button Styles -->
@@ -816,6 +841,68 @@
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 🔤 Typography -->
+    <FontFamily x:Key="AppFontFamily">Segoe UI, system</FontFamily>
+    <FontFamily x:Key="HeadingFontFamily">Segoe UI Semibold, system</FontFamily>
+
+    <!-- Line heights and sizes for consistent rhythm -->
+    <sys:Double x:Key="BodyFontSize">14</sys:Double>
+    <sys:Double x:Key="SmallFontSize">12</sys:Double>
+    <sys:Double x:Key="HeadingFontSize">16</sys:Double>
+
+    <!-- ✨ Premium UI Resources (added for modernization) -->
+    <SolidColorBrush x:Key="CardBackgroundBrush" Color="#0AFFFFFF" />
+    <SolidColorBrush x:Key="AccentGlowBrush" Color="#304A90E2" />
+    <SolidColorBrush x:Key="TabActiveGlowBrush" Color="#404A90E2" />
+    <SolidColorBrush x:Key="SubtleDividerBrush" Color="#10FFFFFF" />
+
+    <!-- ✨ Active Element Glow Effect -->
+    <DropShadowEffect x:Key="ActiveGlow"
+                      Color="#4A90E2"
+                      Direction="270"
+                      ShadowDepth="0"
+                      Opacity="0.5"
+                      BlurRadius="12"/>
+
+    <!-- ✨ Hover Glow Effect -->
+    <DropShadowEffect x:Key="HoverGlow"
+                      Color="#FFFFFF"
+                      Direction="270"
+                      ShadowDepth="0"
+                      Opacity="0.15"
+                      BlurRadius="8"/>
+
+    <!-- ✨ Close Button Danger Glow -->
+    <DropShadowEffect x:Key="DangerGlow"
+                      Color="#DC3545"
+                      Direction="270"
+                      ShadowDepth="0"
+                      Opacity="0.6"
+                      BlurRadius="12"/>
+
+    <!-- 🃏 Card Shadow Effect Style -->
+    <Style x:Key="CardShadowStyle">
+        <Setter Property="Panel.Background" Value="{DynamicResource CardBackgroundBrush}" />
+        <Setter Property="FrameworkElement.Margin" Value="0,4,0,4" />
+    </Style>
+
+    <!-- 🃏 Floating Card Container -->
+    <Style x:Key="ContentCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="8" />
+        <Setter Property="Margin" Value="0,4" />
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect Color="#000000"
+                                  Direction="270"
+                                  ShadowDepth="2"
+                                  Opacity="0.3"
+                                  BlurRadius="8"/>
             </Setter.Value>
         </Setter>
     </Style>
