@@ -38,6 +38,7 @@ namespace SnipShottyBoard.UI.Views
         // ⏰ Timers
         private DispatcherTimer autoSaveTimer;
         private DispatcherTimer statusTimer;
+        private DispatcherTimer recoveryTimer;
         private bool hasUnsavedChanges = false;
 
         // 💾 Debounced window position tracker (fixes choppy dragging)
@@ -77,7 +78,7 @@ namespace SnipShottyBoard.UI.Views
                 // Check if legacy data has any meaningful content
                 var legacyContentNotes = legacyData?.Notes?.Where(n => 
                     !string.IsNullOrWhiteSpace(n.TextContent) || 
-                    (n.ImageFiles != null && n.ImageFiles.Any())).ToList() ?? new List<SavedNote>();
+                    (n.Media != null && n.Media.Any())).ToList() ?? new List<SavedNote>();
                 
                 if (legacyContentNotes.Any())
                 {
@@ -217,6 +218,24 @@ namespace SnipShottyBoard.UI.Views
                 if (hasUnsavedChanges) SaveApplicationData();
             };
             autoSaveTimer.Start();
+
+            // 💾 Setup recovery journal timer (write snapshot every 2s when dirty)
+            recoveryTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(SnipShottyBoard.Data.AppConstants.RecoveryJournalIntervalSeconds)
+            };
+            recoveryTimer.Tick += (s, e) => {
+                if (hasUnsavedChanges)
+                {
+                    var master = new SnipShottyBoard.Data.MasterData
+                    {
+                        Windows = NoteWindowManager.Instance.GetActiveWindows(),
+                        Settings = currentSettings ?? new AppSettings()
+                    };
+                    DataManager.SaveRecoverySnapshot(master);
+                }
+            };
+            recoveryTimer.Start();
 
             // 📊 Setup status bar timer (update every second)
             statusTimer = new DispatcherTimer
@@ -686,6 +705,9 @@ namespace SnipShottyBoard.UI.Views
                 
                 loggingService.LogDebug($"🪟 Saved data for window: {WindowData.Title}");
 
+                // 🗑️ Clear recovery snapshot on successful save
+                DataManager.ClearRecoverySnapshot();
+
                 hasUnsavedChanges = false;
                 UpdateStatusBar();
             }
@@ -731,6 +753,8 @@ namespace SnipShottyBoard.UI.Views
                 autoSaveTimer = null;
                 statusTimer?.Stop();
                 statusTimer = null;
+                recoveryTimer?.Stop();
+                recoveryTimer = null;
 
                 // 🗑️ Cleanup managers
                 settingsManager?.Dispose();

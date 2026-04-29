@@ -24,21 +24,37 @@ namespace SnipShottyBoard
             this.DispatcherUnhandledException += OnDispatcherUnhandledException;
             
             loggingService.LogInfo("🚀 Application starting with global exception handling", "Lifecycle");
-            
-            // Schedule orphaned image cleanup (background, after startup)
+
+            // 💾 Silent crash recovery — merge recovery snapshot before any window loads
+            if (DataManager.TryRestoreFromRecovery())
+            {
+                loggingService.LogInfo("💾 Unsaved text recovered silently on startup", "Lifecycle");
+            }
+
+            // Schedule startup cleanup tasks (background, after startup)
             Task.Run(async () =>
             {
                 try
                 {
                     // Wait 5 seconds after startup to avoid impacting initial load
                     await Task.Delay(5000);
-                    
-                    var deletedCount = DataManager.CleanupOrphanedImages();
-                    
-                    if (deletedCount > 0)
+
+                    // Clean up old log files
+                    var logsDeleted = LoggingService.CleanupOldLogs(7);
+                    if (logsDeleted > 0)
                     {
                         LoggingService.LogInfoStatic(
-                            $"🗑️ Startup cleanup: Removed {deletedCount} orphaned image(s)", 
+                            $"🗑️ Startup log cleanup: Removed {logsDeleted} old log file(s)",
+                            "Lifecycle"
+                        );
+                    }
+
+                    // Clean up orphaned images
+                    var imagesDeleted = DataManager.CleanupOrphanedImages();
+                    if (imagesDeleted > 0)
+                    {
+                        LoggingService.LogInfoStatic(
+                            $"🗑️ Startup cleanup: Removed {imagesDeleted} orphaned image(s)",
                             "Lifecycle"
                         );
                     }

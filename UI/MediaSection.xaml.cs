@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using SnipShottyBoard.Core.Managers;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -23,6 +24,10 @@ namespace SnipShottyBoard.UI
         
         // ✅ Phase 4C P1.5: Lazy loading support
         private bool _isActive = true; // Default to active for main tab
+
+        // ✅ Sprint B Phase B.1: Async lazy-loading for thumbnails
+        private readonly SemaphoreSlim _loadSemaphore = new SemaphoreSlim(4, 4); // Max 4 concurrent decodes
+        private CancellationTokenSource? _pendingLoadsCts;
 
         // 🖱️ Drag and Drop state tracking
         private bool isDragging = false;
@@ -192,6 +197,185 @@ namespace SnipShottyBoard.UI
                 });
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Creates a static (first-frame) thumbnail for GIFs in the Media Vault.
+        /// GIFs only animate in the ImageViewerWindow, not in the vault.
+        /// </summary>
+        private BitmapImage CreateStaticGifThumbnail(string imagePath, int maxWidth = SnipShottyBoard.Data.AppConstants.DefaultThumbnailWidth)
+        {
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad; // Decode into memory, discard stream
+            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache | BitmapCreateOptions.DelayCreation;
+            bitmap.DecodePixelWidth = maxWidth;
+            bitmap.UriSource = new Uri(imagePath);
+            bitmap.EndInit();
+            bitmap.Freeze(); // Thread-safe, single frame
+            return bitmap;
+        }
+
+        /// <summary>
+        /// Creates a placeholder container (no image decoded yet). The async loader
+        /// replaces the placeholder once the thumbnail is ready.
+        /// </summary>
+        private Grid CreatePlaceholderContainer(string imagePath)
+        {
+            var container = new Grid
+            {
+                Width = SnipShottyBoard.Data.AppConstants.MediaContainerWidth,
+                MinHeight = SnipShottyBoard.Data.AppConstants.MediaContainerMinHeight,
+                Margin = new Thickness(5),
+                Background = (System.Windows.Media.Brush)FindResource("ContentCardBrush")
+            };
+            container.Tag = imagePath;
+
+            // Row definitions
+            container.RowDefinitions.Add(new RowDefinition { Height = new GridLength(SnipShottyBoard.Data.AppConstants.MediaThumbnailHeight) });
+            container.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            // Placeholder image area
+            var imageGrid = new Grid();
+            imageGrid.Children.Add(new TextBlock
+            {
+                Text = "· · ·",
+                Foreground = (System.Windows.Media.Brush)FindResource("AppForegroundBrush"),
+                Opacity = 0.3,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = 16
+            });
+            Grid.SetRow(imageGrid, 0);
+            container.Children.Add(imageGrid);
+
+            // Timestamp footer
+            var timestampText = new TextBlock
+            {
+                FontSize = SnipShottyBoard.Data.AppConstants.SmallFontSize,
+                Foreground = (System.Windows.Media.Brush)FindResource("AppForegroundBrush"),
+                Opacity = 0.7,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(2, 4, 2, 2),
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center,
+                Text = "loading…"
+            };
+            Grid.SetRow(timestampText, 1);
+            container.Children.Add(timestampText);
+
+            // 🖱️ Hover effects
+            container.MouseEnter += (s, e) =>
+            {
+                if (!isDragging)
+                    container.Background = (System.Windows.Media.Brush)FindResource("HoverTransparentBrush");
+            };
+            container.MouseLeave += (s, e) =>
+            {
+                if (!isDragging)
+                    container.Background = Brushes.Transparent;
+            };
+
+            // 🎯 Drag handlers
+            AddDragHandlers(container, imagePath);
+
+            return container;
+        }
+
+        /// <summary>
+        /// Asynchronously loads a thumbnail and replaces the placeholder in the container.
+        /// Limited to 4 concurrent decodes via _loadSemaphore.
+        /// </summary>
+        private async Task LoadThumbnailAsync(Grid container, string imagePath, DateTime? timestamp)
+        {
+            await _loadSemaphore.WaitAsync();
+
+            try
+            {
+                BitmapImage? bitmap = null;
+
+                // Decode on a background thread
+                await Task.Run(() =>
+                {
+                    var extension = Path.GetExtension(imagePath).ToLowerInvariant();
+
+                    // Check cache first (cache access is thread-confined but safe for reads)
+                    bitmap = Application.Current.Dispatcher.Invoke(() =>
+                        ImageCacheManager.Instance.GetFromCache(imagePath));
+
+                    if (bitmap != null)
+                        return;
+
+                    if (extension == ".gif")
+                        bitmap = CreateStaticGifThumbnail(imagePath);
+                    else
+                        bitmap = CreateThumbnailBitmap(imagePath);
+                });
+
+                if (bitmap == null)
+                    return;
+
+                // Update UI on dispatcher thread
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    // Ensure container is still in the visual tree
+                    if (container.Parent == null)
+                        return;
+
+                    // Cache the bitmap
+                    ImageCacheManager.Instance.AddToCache(imagePath, bitmap);
+
+                    // Replace placeholder content with actual image
+                    var imageGrid = container.Children.OfType<Grid>().First();
+                    imageGrid.Children.Clear();
+
+                    var image = new Image
+                    {
+                        Source = bitmap,
+                        MaxWidth = 80,
+                        MaxHeight = 80,
+                        Stretch = Stretch.Uniform,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Cursor = System.Windows.Input.Cursors.Hand
+                    };
+                    imageGrid.Children.Add(image);
+
+                    // Update timestamp
+                    var timestampText = container.Children.OfType<TextBlock>().FirstOrDefault();
+                    if (timestampText != null && timestamp.HasValue)
+                    {
+                        timestampText.Text = GetTimeAgoString(timestamp.Value);
+                    }
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when the MediaSection is disposed
+            }
+            catch (Exception ex)
+            {
+                LoggingService.LogErrorStatic("Failed to load thumbnail async", ex, "Media", new {
+                    FileName = PathSanitizer.SanitizePath(imagePath)
+                });
+            }
+            finally
+            {
+                _loadSemaphore.Release();
+            }
+        }
+
+        /// <summary>
+        /// Fire-and-forget: starts async thumbnail load for a path.
+        /// Uses cancellation token to clean up on Dispose.
+        /// </summary>
+        private void EnsureThumbnailLoaded(Grid container, string imagePath, DateTime? timestamp)
+        {
+            _pendingLoadsCts?.Cancel();
+            _pendingLoadsCts = new CancellationTokenSource();
+
+            // Fire and forget — the method handles its own errors
+            _ = Task.Run(() => LoadThumbnailAsync(container, imagePath, timestamp));
         }
 
         // 📦 Create image container with timestamp and drag support (delete button handled separately)
@@ -386,7 +570,7 @@ namespace SnipShottyBoard.UI
             dragStartPoint = default(Point);
         }
 
-        // 🧹 Dispose timer when control is unloaded
+        // 🧹 Dispose timer and cancel pending async loads when control is unloaded
         public void Dispose()
         {
             try
@@ -398,6 +582,12 @@ namespace SnipShottyBoard.UI
                     clickTimer.Tick -= OnClickTimerTick;
                     clickTimer = null;
                 }
+
+                // ✅ Sprint B B.1: Cancel pending thumbnail loads
+                _pendingLoadsCts?.Cancel();
+                _pendingLoadsCts?.Dispose();
+                _pendingLoadsCts = null;
+                _loadSemaphore?.Dispose();
             }
             catch (Exception ex)
             {
@@ -762,7 +952,7 @@ namespace SnipShottyBoard.UI
             }
         }
 
-        // 🏗️ Rebuild UI to match data order (ensures synchronization)
+        // 🏗️ Rebuild UI to match data order — uses lazy async loading (Sprint B B.1)
         private void RebuildUIFromData()
         {
             // Store current dragged container reference
@@ -780,49 +970,43 @@ namespace SnipShottyBoard.UI
                 ImagePanel.Children.Remove(container);
             }
 
-            // Rebuild from data order
+            // Rebuild from data order — placeholders first, async load after
             foreach (var imagePath in imageFiles)
             {
                 try
                 {
                     // ✅ Layer separation: File I/O delegated to DataManager (Phase 4C P1.3)
-                    if (DataManager.ValidateImageFile(imagePath))
+                    if (!DataManager.ValidateImageFile(imagePath))
+                        continue;
+
+                    // 📦 Add placeholder container (instant, no decode)
+                    var container = CreatePlaceholderContainer(imagePath);
+                    ImagePanel.Children.Add(container);
+
+                    // Restore dragged container reference if this is the dragged item
+                    if (wasDragging && imagePath == draggedPath)
                     {
-                        var bitmap = CreateThumbnailBitmap(imagePath);
-                        if (bitmap == null) continue; // Skip if thumbnail creation failed
-
-                        var image = new Image
+                        draggedContainer = container;
+                        if (isDragging)
                         {
-                            Source = bitmap,
-                            MaxWidth = 80,
-                            MaxHeight = 80,
-                            Stretch = Stretch.Uniform,
-                            Cursor = System.Windows.Input.Cursors.Hand
-                        };
-
-                        var container = CreateImageContainer(image, imagePath);
-                        
-                        // Restore dragged container reference if this is the dragged item
-                        if (wasDragging && imagePath == draggedPath)
-                        {
-                            draggedContainer = container;
-                            if (isDragging)
-                            {
-                                ApplyDraggingVisualState(container);
-                                // Re-wire drag events
-                                container.MouseMove += OnDragMouseMove;
-                                container.MouseUp += OnDragMouseUp;
-                                container.MouseLeave += OnDragMouseLeave;
-                                container.CaptureMouse();
-                            }
+                            ApplyDraggingVisualState(container);
+                            // Re-wire drag events
+                            container.MouseMove += OnDragMouseMove;
+                            container.MouseUp += OnDragMouseUp;
+                            container.MouseLeave += OnDragMouseLeave;
+                            container.CaptureMouse();
                         }
-
-                        ImagePanel.Children.Add(container);
                     }
+
+                    // 🚀 Start async thumbnail load (fire-and-forget, semaphore-limited)
+                    var timestamp = imageTimestamps.TryGetValue(imagePath, out var ts) ? ts : (DateTime?)null;
+                    EnsureThumbnailLoaded(container, imagePath, timestamp);
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Failed to rebuild container for {imagePath}: {ex.Message}");
+                    LoggingService.LogErrorStatic("Failed to rebuild container", ex, "Media", new {
+                        FileName = PathSanitizer.SanitizePath(imagePath)
+                    });
                 }
             }
         }
@@ -895,11 +1079,11 @@ namespace SnipShottyBoard.UI
             OnMediaChanged?.Invoke(); // 🔔 Trigger data change notification
         }
 
-        // 📂 Load images from file paths
+        // 📂 Load images from file paths — uses lazy async loading (Sprint B B.1)
         private void LoadImagesFromFiles()
         {
             ImagePanel.Children.Clear();
-            
+
             foreach (var imagePath in imageFiles)
             {
                 try
@@ -908,33 +1092,24 @@ namespace SnipShottyBoard.UI
                     var imageInfo = DataManager.GetImageInfo(imagePath);
                     if (imageInfo.HasValue && imageInfo.Value.exists)
                     {
-                        var bitmap = CreateThumbnailBitmap(imagePath);
-                        if (bitmap == null) continue; // Skip if thumbnail creation failed
-
-                        var image = new Image
-                        {
-                            Source = bitmap,
-                            MaxWidth = 120,
-                            MaxHeight = 120,
-                            Stretch = Stretch.Uniform,
-                            Cursor = System.Windows.Input.Cursors.Hand
-                        };
-
                         // 🕒 Use file creation time as timestamp for existing images
-                        // ✅ File info from DataManager (Phase 4C P1.3)
                         var fileInfo = new FileInfo(imagePath);
                         var timestamp = fileInfo.CreationTime;
-                        
-                        // 🖼️ Add image with file timestamp (don't use current time)
                         imageTimestamps[imagePath] = timestamp;
-                        var container = CreateImageContainer(image, imagePath);
+
+                        // 📦 Add placeholder container (instant, no decode)
+                        var container = CreatePlaceholderContainer(imagePath);
                         ImagePanel.Children.Add(container);
+
+                        // 🚀 Start async thumbnail load (fire-and-forget, semaphore-limited)
+                        EnsureThumbnailLoaded(container, imagePath, timestamp);
                     }
                 }
                 catch (Exception ex)
                 {
-                    // TODO: Add proper logging
-                    System.Diagnostics.Debug.WriteLine($"Failed to load image: {ex.Message}");
+                    LoggingService.LogErrorStatic("Failed to create image placeholder", ex, "Media", new {
+                        FileName = PathSanitizer.SanitizePath(imagePath)
+                    });
                 }
             }
         }

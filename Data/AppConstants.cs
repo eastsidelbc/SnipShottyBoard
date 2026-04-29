@@ -20,6 +20,18 @@ namespace SnipShottyBoard.Data
         /// How often status information (time, counts) is refreshed
         /// </summary>
         public const int StatusUpdateIntervalSeconds = 1;
+
+        /// <summary>
+        /// Recovery journal interval in seconds
+        /// How often we write a crash-recovery snapshot while text is dirty
+        /// </summary>
+        public const int RecoveryJournalIntervalSeconds = 2;
+
+        /// <summary>
+        /// Recovery journal max age in hours
+        /// Snapshots older than this are ignored on startup restore
+        /// </summary>
+        public const int RecoveryJournalMaxAgeHours = 1;
         #endregion
 
         #region Image Configuration

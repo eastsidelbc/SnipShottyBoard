@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -12,19 +14,23 @@ namespace SnipShottyBoard.UI
 {
     /// <summary>
     /// 🖼️ Custom Image Viewer Window with toolbar functionality
-    /// 
+    ///
     /// KEY FEATURES:
     /// - Window automatically sizes to fit the image at original resolution (within screen limits)
     /// - Image scales automatically when you resize the window
     /// - Copy and delete functionality with keyboard shortcuts
     /// - Clean, modern UI with status bar showing image details
+    /// - LRU cache integration for static images (keyed by path:full)
+    /// - GIFs load with full animation, skip cache
     /// </summary>
     public partial class ImageViewerWindow : Window
     {
+        private const string FullResCacheSuffix = ":full";
+
         private string currentImagePath;
         private BitmapImage currentImage;
         private Action<string> onImageDeleted; // Callback when image is deleted
-        
+
         // 🖼️ Navigation support
         private List<string> allImagePaths;
         private int currentImageIndex;
@@ -96,15 +102,11 @@ namespace SnipShottyBoard.UI
             this.Focus();
         }
 
-                // 🖼️ Load and display an image (supports animated GIFs)
+        // 🖼️ Load and display an image (supports animated GIFs)
         public void LoadImage(string imagePath)
         {
-            // TODO: Add LoggingService integration for proper structured logging
-            // Basic debug output for essential image loading information
-            
             try
             {
-                // Validate file exists
                 if (!File.Exists(imagePath))
                 {
                     ShowError("Image file not found.");
@@ -113,162 +115,11 @@ namespace SnipShottyBoard.UI
 
                 currentImagePath = imagePath;
                 var extension = Path.GetExtension(imagePath).ToLowerInvariant();
-                var fileInfo = new FileInfo(imagePath);
-                
-                // Basic file info logging
-                System.Diagnostics.Debug.WriteLine($"🖼️ UI: Loading image: {Path.GetFileName(imagePath)}, Size: {fileInfo.Length / 1024.0:F1} KB");
 
-                // 🎬 Special handling for animated GIFs
                 if (extension == ".gif")
-                {
-                    // TODO: Add structured logging for GIF loading diagnostics
-                    
-                    try
-                    {
-                        var bitmap = new BitmapImage();
-                        bitmap.BeginInit();
-                        bitmap.CacheOption = BitmapCacheOption.OnDemand; // Don't freeze for animation
-                        bitmap.CreateOptions = BitmapCreateOptions.None; // Allow animation
-                        bitmap.DecodePixelWidth = 0; // Don't limit size
-                        bitmap.DecodePixelHeight = 0; // Don't limit size
-                        bitmap.UriSource = new Uri(imagePath, UriKind.Absolute);
-                        bitmap.EndInit();
-                        
-                        // 🎬 Check if GIF is actually animated
-                        var decoder = BitmapDecoder.Create(new Uri(imagePath, UriKind.Absolute), BitmapCreateOptions.None, BitmapCacheOption.OnDemand);
-                        var frameCount = decoder.Frames.Count;
-                        System.Diagnostics.Debug.WriteLine($"🎬 Step 8: GIF frame count: {frameCount}");
-                        Console.WriteLine($"🎬 Step 8: GIF frame count: {frameCount}");
-                        
-                        if (frameCount > 1)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"✅ Animated GIF detected with {frameCount} frames");
-                            Console.WriteLine($"✅ Animated GIF detected with {frameCount} frames");
-                            
-                            // 🎬 Use BitmapImage directly for animation
-                            currentImage = bitmap;
-                            
-                            // 🔍 CRITICAL: Clear any render options that might block animation
-                            Console.WriteLine($"🔍 BEFORE assignment - clearing animation-blocking render options");
-                            RenderOptions.SetBitmapScalingMode(DisplayImage, BitmapScalingMode.Unspecified);
-                            DisplayImage.SnapsToDevicePixels = false;
-                            DisplayImage.UseLayoutRounding = false;
-                            Console.WriteLine($"🔍 AFTER clearing - BitmapScalingMode: {RenderOptions.GetBitmapScalingMode(DisplayImage)}");
-                            
-                            DisplayImage.Source = bitmap;
-                            System.Diagnostics.Debug.WriteLine($"🎬 Step 9: BitmapImage assigned to DisplayImage.Source");
-                            Console.WriteLine($"🎬 Step 9: BitmapImage assigned to DisplayImage.Source");
-                            
-                            // 🎬 Debug the UI state after assignment
-                            System.Diagnostics.Debug.WriteLine($"🎬 DisplayImage.Source type: {DisplayImage.Source?.GetType().Name}");
-                            Console.WriteLine($"🎬 DisplayImage.Source type: {DisplayImage.Source?.GetType().Name}");
-                            System.Diagnostics.Debug.WriteLine($"🎬 DisplayImage.Parent type: {DisplayImage.Parent?.GetType().Name}");
-                            Console.WriteLine($"🎬 DisplayImage.Parent type: {DisplayImage.Parent?.GetType().Name}");
-                            
-                            // 🔍 CRITICAL: Check if the Viewbox is affecting animation
-                            var viewbox = DisplayImage.Parent as Viewbox;
-                            if (viewbox != null)
-                            {
-                                Console.WriteLine($"🔍 CRITICAL: Image is inside Viewbox!");
-                                Console.WriteLine($"🔍 Viewbox.Stretch: {viewbox.Stretch}");
-                                Console.WriteLine($"🔍 Viewbox.StretchDirection: {viewbox.StretchDirection}");
-                                Console.WriteLine($"🔍 WARNING: Viewbox transformations may block GIF animation!");
-                            }
-                            
-                            // 🔍 Force a layout update to ensure rendering
-                            Console.WriteLine($"🔍 Forcing layout update...");
-                            DisplayImage.UpdateLayout();
-                            this.UpdateLayout();
-                            
-                            // 🎬 Check animation state after UI thread processes
-                            this.Dispatcher.BeginInvoke(new Action(() => {
-                                System.Diagnostics.Debug.WriteLine($"🎬 POST-LOAD: BitmapImage.IsDownloading: {bitmap.IsDownloading}");
-                                Console.WriteLine($"🎬 POST-LOAD: BitmapImage.IsDownloading: {bitmap.IsDownloading}");
-                                System.Diagnostics.Debug.WriteLine($"🎬 POST-LOAD: BitmapImage.IsFrozen: {bitmap.IsFrozen}");
-                                Console.WriteLine($"🎬 POST-LOAD: BitmapImage.IsFrozen: {bitmap.IsFrozen}");
-                                System.Diagnostics.Debug.WriteLine($"🎬 POST-LOAD: DisplayImage.ActualWidth: {DisplayImage.ActualWidth}");
-                                Console.WriteLine($"🎬 POST-LOAD: DisplayImage.ActualWidth: {DisplayImage.ActualWidth}");
-                                System.Diagnostics.Debug.WriteLine($"🎬 POST-LOAD: DisplayImage.ActualHeight: {DisplayImage.ActualHeight}");
-                                Console.WriteLine($"🎬 POST-LOAD: DisplayImage.ActualHeight: {DisplayImage.ActualHeight}");
-                                System.Diagnostics.Debug.WriteLine($"🎬 POST-LOAD: DisplayImage.RenderSize: {DisplayImage.RenderSize}");
-                                Console.WriteLine($"🎬 POST-LOAD: DisplayImage.RenderSize: {DisplayImage.RenderSize}");
-                                System.Diagnostics.Debug.WriteLine($"🎬 POST-LOAD: Window.IsLoaded: {this.IsLoaded}");
-                                Console.WriteLine($"🎬 POST-LOAD: Window.IsLoaded: {this.IsLoaded}");
-                                
-                                // 🔍 CRITICAL: Final animation state verification
-                                Console.WriteLine($"🔍 FINAL: DisplayImage.Source == bitmap: {DisplayImage.Source == bitmap}");
-                                Console.WriteLine($"🔍 FINAL: bitmap.CanFreeze: {bitmap.CanFreeze}");
-                                Console.WriteLine($"🔍 FINAL: Application.Current.HasAnimations: Checking...");
-                                
-                                // 🎬 ANIMATION TEST: Monitor if the bitmap changes over time (indicates animation)
-                                var monitorTimer = new System.Windows.Threading.DispatcherTimer
-                                {
-                                    Interval = TimeSpan.FromSeconds(2)
-                                };
-                                
-                                int checks = 0;
-                                monitorTimer.Tick += (s, e) =>
-                                {
-                                    checks++;
-                                    Console.WriteLine($"🎬 ANIMATION CHECK #{checks}: BitmapImage.IsFrozen: {bitmap.IsFrozen}");
-                                    Console.WriteLine($"🎬 ANIMATION CHECK #{checks}: DisplayImage.Source.IsFrozen: {((BitmapImage)DisplayImage.Source)?.IsFrozen}");
-                                    Console.WriteLine($"🎬 ANIMATION CHECK #{checks}: Is the GIF animating visually? (You should see movement)");
-                                    
-                                    if (checks >= 3)
-                                    {
-                                        monitorTimer.Stop();
-                                        Console.WriteLine($"🎬 ANIMATION MONITORING COMPLETE - Check visually if GIF is animating");
-                                    }
-                                };
-                                
-                                monitorTimer.Start();
-                            }), System.Windows.Threading.DispatcherPriority.Loaded);
-                        }
-                        else
-                        {
-                            System.Diagnostics.Debug.WriteLine($"⚠️ GIF has only {frameCount} frame - may not be animated");
-                            currentImage = bitmap;
-                            DisplayImage.Source = bitmap;
-                        }
-                        
-                        System.Diagnostics.Debug.WriteLine($"✅ GIF loaded successfully - Animation should be working if multi-frame");
-                        System.Diagnostics.Debug.WriteLine($"🎬 ===== GIF ANIMATION DEBUG END =====");
-                    }
-                    catch (Exception gifEx)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"❌ GIF loading error: {gifEx.Message}");
-                        System.Diagnostics.Debug.WriteLine($"🔍 Stack trace: {gifEx.StackTrace}");
-                        
-                        // Try alternative GIF loading method
-                        System.Diagnostics.Debug.WriteLine($"🔄 Trying alternative GIF loading method");
-                        try
-                        {
-                            LoadGifWithAnimation(imagePath);
-                        }
-                        catch (Exception altEx)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"❌ Alternative GIF loading also failed: {altEx.Message}");
-                            // Final fallback to static image loading
-                            System.Diagnostics.Debug.WriteLine($"🔄 Final fallback to static image loading for GIF");
-                            LoadAsStaticImage(imagePath);
-                        }
-                    }
-                }
+                    LoadGifAsync(imagePath);
                 else
-                {
-                    // 📥 Load static images fully into memory to avoid file locking
-                    LoadAsStaticImage(imagePath);
-                }
-
-                // 📏 Update window title with filename
-                var fileName = Path.GetFileName(imagePath);
-                this.Title = $"🖼️ {fileName}";
-
-                // 📊 Update image information display
-                UpdateImageInfo();
-
-                // 🔄 Set reasonable initial window size that allows resizing
-                AutoSizeWindow(currentImage);
+                    LoadStaticAsync(imagePath);
             }
             catch (Exception ex)
             {
@@ -276,100 +127,92 @@ namespace SnipShottyBoard.UI
             }
         }
 
-        // 🎬 Alternative GIF loading method using GifBitmapDecoder
-        private void LoadGifWithAnimation(string imagePath)
+        /// <summary>
+        /// Load a static image asynchronously on a background thread, then apply on UI thread.
+        /// Checks the LRU cache first; caches on hit/miss using key "path:full".
+        /// </summary>
+        private async void LoadStaticAsync(string imagePath)
+        {
+            var cacheKey = imagePath + FullResCacheSuffix;
+
+            // Check cache on UI thread
+            BitmapImage? cached = ImageCacheManager.Instance.GetFromCache(cacheKey);
+            if (cached != null)
+            {
+                ApplyImage(cached, imagePath);
+                return;
+            }
+
+            // Decode on background thread
+            var bitmap = await Task.Run(() =>
+            {
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.UriSource = new Uri(imagePath, UriKind.Absolute);
+                bmp.EndInit();
+                bmp.Freeze();
+                return bmp;
+            });
+
+            // Cache and apply on UI thread
+            Dispatcher.Invoke(() =>
+            {
+                ImageCacheManager.Instance.AddToCache(cacheKey, bitmap);
+                ApplyImage(bitmap, imagePath);
+            });
+        }
+
+        /// <summary>
+        /// Load a GIF with full animation support.
+        /// GIFs skip the cache since their BitmapImages can't be frozen.
+        /// Falls back to static loading if animation fails.
+        /// </summary>
+        private async void LoadGifAsync(string imagePath)
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine($"🎬 ===== ALTERNATIVE GIF LOADING DEBUG START =====");
-                System.Diagnostics.Debug.WriteLine($"🎬 Loading GIF with animation support: {imagePath}");
-                System.Diagnostics.Debug.WriteLine($"🎬 ALT Thread ID: {System.Threading.Thread.CurrentThread.ManagedThreadId}");
-                System.Diagnostics.Debug.WriteLine($"🎬 ALT UI Thread: {this.Dispatcher.CheckAccess()}");
-                
-                // Use GifBitmapDecoder for better animation support
-                var decoder = new System.Windows.Media.Imaging.GifBitmapDecoder(
-                    new Uri(imagePath, UriKind.Absolute),
-                    System.Windows.Media.Imaging.BitmapCreateOptions.None,
-                    System.Windows.Media.Imaging.BitmapCacheOption.OnDemand);
-                
-                var frameCount = decoder.Frames.Count;
-                System.Diagnostics.Debug.WriteLine($"🎬 ALT: GifBitmapDecoder frame count: {frameCount}");
-                System.Diagnostics.Debug.WriteLine($"🎬 ALT: Decoder type: {decoder.GetType().Name}");
-                System.Diagnostics.Debug.WriteLine($"🎬 ALT: Decoder.IsDownloading: {decoder.IsDownloading}");
-                
-                if (frameCount > 1)
+                var bitmap = await Task.Run(() =>
                 {
-                    System.Diagnostics.Debug.WriteLine($"🎬 ALT: Creating BitmapImage for {frameCount} frame GIF");
-                    
-                    // 🎬 Use BitmapImage for animation instead of decoder frames
-                    var bitmap = new BitmapImage();
-                    bitmap.BeginInit();
-                    System.Diagnostics.Debug.WriteLine($"🎬 ALT: BeginInit() called");
-                    
-                    bitmap.CacheOption = BitmapCacheOption.OnDemand;
-                    bitmap.CreateOptions = BitmapCreateOptions.None;
-                    System.Diagnostics.Debug.WriteLine($"🎬 ALT: CacheOption={bitmap.CacheOption}, CreateOptions={bitmap.CreateOptions}");
-                    
-                    bitmap.UriSource = new Uri(imagePath, UriKind.Absolute);
-                    System.Diagnostics.Debug.WriteLine($"🎬 ALT: UriSource set");
-                    
-                    bitmap.EndInit();
-                    System.Diagnostics.Debug.WriteLine($"🎬 ALT: EndInit() called");
-                    System.Diagnostics.Debug.WriteLine($"🎬 ALT: BitmapImage.IsFrozen: {bitmap.IsFrozen}");
-                    System.Diagnostics.Debug.WriteLine($"🎬 ALT: BitmapImage.IsDownloading: {bitmap.IsDownloading}");
-                    
-                    currentImage = bitmap;
-                    DisplayImage.Source = bitmap;
-                    System.Diagnostics.Debug.WriteLine($"✅ ALT: GifBitmapDecoder + BitmapImage loaded animated GIF successfully");
-                    
-                    // 🎬 Post-load debugging
-                    this.Dispatcher.BeginInvoke(new Action(() => {
-                        System.Diagnostics.Debug.WriteLine($"🎬 ALT POST-LOAD: BitmapImage.IsDownloading: {bitmap.IsDownloading}");
-                        System.Diagnostics.Debug.WriteLine($"🎬 ALT POST-LOAD: BitmapImage.IsFrozen: {bitmap.IsFrozen}");
-                        System.Diagnostics.Debug.WriteLine($"🎬 ALT POST-LOAD: DisplayImage render state OK");
-                    }), System.Windows.Threading.DispatcherPriority.Loaded);
-                }
-                else
+                    var bmp = new BitmapImage();
+                    bmp.BeginInit();
+                    bmp.CacheOption = BitmapCacheOption.OnDemand;
+                    bmp.CreateOptions = BitmapCreateOptions.None;
+                    bmp.UriSource = new Uri(imagePath, UriKind.Absolute);
+                    bmp.EndInit();
+                    return bmp;
+                });
+
+                Dispatcher.Invoke(() =>
                 {
-                    System.Diagnostics.Debug.WriteLine($"🎬 ALT: Only {frameCount} frame, falling back to static");
-                    LoadAsStaticImage(imagePath);
-                }
-                
-                System.Diagnostics.Debug.WriteLine($"🎬 ===== ALTERNATIVE GIF LOADING DEBUG END =====");
+                    RenderOptions.SetBitmapScalingMode(DisplayImage, BitmapScalingMode.Unspecified);
+                    DisplayImage.SnapsToDevicePixels = false;
+                    DisplayImage.UseLayoutRounding = false;
+
+                    ApplyImage(bitmap, imagePath);
+                });
             }
-            catch (Exception ex)
+            catch
             {
-                System.Diagnostics.Debug.WriteLine($"❌ ALT: GifBitmapDecoder failed: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"❌ ALT: Stack trace: {ex.StackTrace}");
-                LoadAsStaticImage(imagePath);
+                // Fallback: load GIF as a static first-frame image
+                LoadStaticAsync(imagePath);
             }
         }
 
-        // 📥 Load image as static (non-animated)
-        private void LoadAsStaticImage(string imagePath)
+        /// <summary>
+        /// Assign the bitmap to the UI and update window state.
+        /// Must be called on the UI thread.
+        /// </summary>
+        private void ApplyImage(BitmapImage bitmap, string imagePath)
         {
-            try
-            {
-                System.Diagnostics.Debug.WriteLine($"📥 Loading as static image: {imagePath}");
-                
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad; // Critical: Load fully into memory and close file handle
-                bitmap.CreateOptions = BitmapCreateOptions.None;
-                bitmap.UriSource = new Uri(imagePath, UriKind.Absolute);
-                bitmap.EndInit();
-                bitmap.Freeze(); // Make it thread-safe and prevent further changes
+            currentImage = bitmap;
+            DisplayImage.Source = bitmap;
 
-                currentImage = bitmap;
-                DisplayImage.Source = bitmap;
-                
-                System.Diagnostics.Debug.WriteLine($"✅ Static image loaded successfully");
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"❌ Static image loading error: {ex.Message}");
-                ShowError($"Failed to load image: {ex.Message}");
-            }
+            var fileName = Path.GetFileName(imagePath);
+            this.Title = $"🖼️ {fileName}";
+
+            UpdateImageInfo();
+            AutoSizeWindow(bitmap);
         }
 
         // 📐 Set window size to show image at original resolution (within screen limits)
@@ -453,24 +296,18 @@ namespace SnipShottyBoard.UI
         private void NavigateToPreviousImage()
         {
             if (allImagePaths == null || allImagePaths.Count <= 1) return;
-            
+
             currentImageIndex = (currentImageIndex - 1 + allImagePaths.Count) % allImagePaths.Count;
-            var previousImagePath = allImagePaths[currentImageIndex];
-            
-            System.Diagnostics.Debug.WriteLine($"🔄 Navigating to previous image: {previousImagePath} (index: {currentImageIndex})");
-            LoadImage(previousImagePath);
+            LoadImage(allImagePaths[currentImageIndex]);
         }
 
         // 🖼️ Navigate to next image
         private void NavigateToNextImage()
         {
             if (allImagePaths == null || allImagePaths.Count <= 1) return;
-            
+
             currentImageIndex = (currentImageIndex + 1) % allImagePaths.Count;
-            var nextImagePath = allImagePaths[currentImageIndex];
-            
-            System.Diagnostics.Debug.WriteLine($"🔄 Navigating to next image: {nextImagePath} (index: {currentImageIndex})");
-            LoadImage(nextImagePath);
+            LoadImage(allImagePaths[currentImageIndex]);
         }
 
         // 📊 Update status bar information display
@@ -567,44 +404,38 @@ namespace SnipShottyBoard.UI
                 if (!string.IsNullOrEmpty(currentImagePath))
                 {
                     var pathToDelete = currentImagePath;
-                    System.Diagnostics.Debug.WriteLine($"🗑️ Instant delete for: {pathToDelete}");
-                    
-                    // 🔔 INSTANT: Remove from MediaSection UI immediately
+
+                    // 🧹 Remove from LRU cache (both thumbnail and full-res variants)
+                    ImageCacheManager.Instance.RemoveAllForPath(pathToDelete);
+
                     if (onImageDeleted != null)
-                    {
                         onImageDeleted.Invoke(pathToDelete);
-                    }
-                    
-                    // 🚪 INSTANT: Close window immediately
+
                     Close();
-                    
-                    // 🗑️ BACKGROUND: Clean up file asynchronously (non-blocking)
-                    System.Threading.Tasks.Task.Run(() =>
+
+                    // 🗑️ Delete file asynchronously (non-blocking)
+                    Task.Run(() =>
                     {
                         try
                         {
-                            // Simple file deletion - if it fails, just log it
                             if (File.Exists(pathToDelete))
-                            {
                                 File.Delete(pathToDelete);
-                                System.Diagnostics.Debug.WriteLine($"✅ Background file deletion successful: {pathToDelete}");
-                            }
                         }
-                        catch (Exception ex)
+                        catch
                         {
-                            System.Diagnostics.Debug.WriteLine($"⚠️ Background file deletion failed (image already removed from UI): {ex.Message}");
+                            // File may already be removed — ignore
                         }
                     });
                 }
                 else
                 {
-                    Close(); // Just close if no path
+                    Close();
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"❌ Delete failed: {ex.Message}");
-                Close(); // Close anyway to avoid hanging window
+                Close();
             }
         }
         

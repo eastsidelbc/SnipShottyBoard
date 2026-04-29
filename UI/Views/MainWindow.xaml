@@ -62,14 +62,13 @@
                 <RowDefinition Height="28" />
             </Grid.RowDefinitions>
 
-            <!-- 🎯 Modern Header Bar with Rounded Top Corners -->
-            <Border Grid.Row="0" 
-                    Background="{DynamicResource HeaderBackgroundBrush}"
-                    CornerRadius="12,12,0,0"
-                    BorderBrush="{DynamicResource BorderBrush}"
+            <!-- 🎯 Flat Header Bar — blends into deep chrome -->
+            <Border Grid.Row="0"
+                    Background="{DynamicResource AppBackgroundBrush}"
+                    BorderBrush="{DynamicResource SubtleDividerBrush}"
                     BorderThickness="0,0,0,1">
                 <Grid>
-                
+
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />  <!-- + button -->
                     <ColumnDefinition Width="*" />     <!-- Draggable area -->
@@ -173,13 +172,12 @@
                 </Grid>
             </Border>
 
-            <!-- 📑 Tab Strip (Below Header) - Pill Container -->
+            <!-- 📑 Tab Strip — flat chrome, tabs float via contrast -->
             <Border Grid.Row="1"
-                    Background="{DynamicResource SubtleDividerBrush}"
-                    BorderBrush="{DynamicResource BorderBrush}"
+                    Background="{DynamicResource AppBackgroundBrush}"
+                    BorderBrush="{DynamicResource SubtleDividerBrush}"
                     BorderThickness="0,0,0,1"
-                    CornerRadius="8"
-                    Margin="4,0,4,2">
+                    Padding="4,4,4,2">
 
                 <ScrollViewer Background="Transparent"
                               MaxHeight="200"
@@ -194,19 +192,26 @@
                 </ScrollViewer>
             </Border>
 
-            <!-- 📝 Main Content Area (Tab Content) -->
-            <materialDesign:Card Grid.Row="2"
-                                 UniformCornerRadius="8"
-                                 Margin="4,0,4,2"
-                                 Background="{DynamicResource CardBackgroundBrush}">
-                <Border>
+            <!-- 📝 Main Content Area — solid zinc card with depth shadow -->
+            <Border Grid.Row="2"
+                    Background="{DynamicResource ContentCardBrush}"
+                    CornerRadius="6"
+                    Margin="4,0,4,2"
+                    BorderBrush="{DynamicResource SubtleDividerBrush}"
+                    BorderThickness="1,1,1,0">
+                <Border.Effect>
+                    <DropShadowEffect Color="#000000"
+                                      Direction="270"
+                                      ShadowDepth="2"
+                                      Opacity="0.2"
+                                      BlurRadius="6"/>
+                </Border.Effect>
 
-                    <!-- 🔗 Tab Content Display -->
-                    <ContentPresenter x:Name="TabContentArea"
-                                      VerticalAlignment="Stretch"
-                                      HorizontalAlignment="Stretch" />
-                </Border>
-            </materialDesign:Card>
+                <!-- 🔗 Tab Content Display -->
+                <ContentPresenter x:Name="TabContentArea"
+                                  VerticalAlignment="Stretch"
+                                  HorizontalAlignment="Stretch" />
+            </Border>
 
             <!-- 📊 Modern Status Bar with Rounded Bottom Corners -->
             <Border Grid.Row="3" 

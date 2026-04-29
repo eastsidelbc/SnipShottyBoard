@@ -1,6 +1,6 @@
-# SnipShottyBoard - A Modern Tabbed Sticky Notes Application
+# SnipShottyBoard - A Sticky Notes App, But Better and Professional
 
-**SnipShottyBoard** is a sophisticated desktop sticky notes application built with WPF (.NET 8) that combines the simplicity of traditional sticky notes with modern productivity features. Here's what makes it special:
+**SnipShottyBoard** is essentially a sticky notes app, but better and professional. It combines the simplicity of traditional notes with modern productivity features. Here's what makes it special:
 
 ## Core Functionality
 
@@ -52,9 +52,9 @@
 - **Clipboard Management**: Paste and organize images and text snippets
 - **Desktop Productivity**: Always-accessible notes that stay organized
 
-## Getting Started
+### What It Is
 
-### Prerequisites
+This is essentially a **professional-grade sticky notes application** that goes beyond basic note-taking to provide a comprehensive digital workspace for capturing, organizing, and managing both text and visual information. It's designed for users who want a lightweight but powerful tool for daily productivity tasks.
 - Windows 10/11
 - .NET 8 Runtime
 

@@ -20,19 +20,24 @@ namespace SnipShottyBoard.Core.Managers
         private static readonly string AppDataFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SnipShottyBoard");
         
+        private static readonly string MasterFilePath = Path.Combine(AppDataFolder, "master.json");
         private static readonly string NotesFilePath = Path.Combine(AppDataFolder, "notes.json");
         private static readonly string NoteWindowsFilePath = Path.Combine(AppDataFolder, "notewindows.json");
         private static readonly string ImagesFolder = Path.Combine(AppDataFolder, "images");
         private static readonly string SettingsFilePath = Path.Combine(AppDataFolder, "settings.json");
-        
+
         // ✅ Phase 4 Persistence Fix: Canonical snapshot migration
         private static readonly string CanonicalSnapshotPath = Path.Combine(AppDataFolder, "notewindows-20251120-172254.json");
         private static readonly string MigrationFlagPath = Path.Combine(AppDataFolder, "notewindows_snapshot_applied.flag");
+
+        // ✅ Sprint A Phase A.1: Legacy consolidation flag
+        private static readonly string MasterMigrationFlagPath = Path.Combine(AppDataFolder, "master_migration_applied.flag");
 
         static DataManager()
         {
             EnsureDirectoryExists();
             ApplyCanonicalSnapshotIfNeeded();
+            MigrateToMasterIfNeeded();
         }
 
         private static void EnsureDirectoryExists()
@@ -98,6 +103,132 @@ namespace SnipShottyBoard.Core.Managers
                 // Don't throw - let app continue with whatever data exists
             }
         }
+
+        /// <summary>
+        /// Sprint A Phase A.1: One-time migration from legacy files to master.json
+        /// On first run after this change, consolidates notewindows.json + settings.json into master.json.
+        /// </summary>
+        private static void MigrateToMasterIfNeeded()
+        {
+            try
+            {
+                if (File.Exists(MasterMigrationFlagPath))
+                {
+                    LoggingService.LogDebugStatic("Master migration already applied (flag exists)", "Data");
+                    return;
+                }
+
+                if (File.Exists(MasterFilePath))
+                {
+                    // master.json already exists — no migration needed
+                    File.WriteAllText(MasterMigrationFlagPath, $"Master.json already present at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                    return;
+                }
+
+                // Try to consolidate legacy files
+                var windows = new List<NoteWindowData>();
+                if (File.Exists(NoteWindowsFilePath))
+                {
+                    windows = LoadNoteWindows();
+                    LoggingService.LogInfoStatic($"Migrating {windows.Count} windows from notewindows.json to master.json", "Data");
+                }
+
+                var settings = LoadSettings();
+                LoggingService.LogInfoStatic("Migrating settings from settings.json to master.json", "Data");
+
+                var master = new MasterData
+                {
+                    Version = 1,
+                    Windows = windows,
+                    Settings = settings
+                };
+
+                SaveMasterData(master);
+                File.WriteAllText(MasterMigrationFlagPath, $"Legacy files consolidated to master.json at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                LoggingService.LogInfoStatic("✅ Master migration complete", "Data");
+            }
+            catch (Exception ex)
+            {
+                LoggingService.LogErrorStatic("Failed to migrate to master.json", ex, "Data");
+            }
+        }
+
+        #region Master Data Management
+
+        /// <summary>
+        /// 💾 Save complete application state to master.json atomically
+        /// </summary>
+        public static void SaveMasterData(MasterData masterData)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            try
+            {
+                var success = AtomicFileManager.AtomicSave(MasterFilePath, masterData, maxBackups: 20);
+                stopwatch.Stop();
+
+                if (success)
+                {
+                    LoggingService.LogInfoStatic($"Master data saved in {stopwatch.ElapsedMilliseconds}ms", "Perf", new {
+                        WindowCount = masterData?.Windows?.Count ?? 0,
+                        DurationMs = stopwatch.ElapsedMilliseconds
+                    });
+                }
+                else
+                {
+                    LoggingService.LogErrorStatic("AtomicSave returned false for master data", null, "Data", new {
+                        FilePath = PathSanitizer.SanitizePath(MasterFilePath),
+                        DurationMs = stopwatch.ElapsedMilliseconds
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                LoggingService.LogErrorStatic($"Failed to save master data after {stopwatch.ElapsedMilliseconds}ms", ex, "Perf", new {
+                    FilePath = PathSanitizer.SanitizePath(MasterFilePath),
+                    DurationMs = stopwatch.ElapsedMilliseconds
+                });
+            }
+        }
+
+        /// <summary>
+        /// 📥 Load complete application state from master.json with recovery
+        /// </summary>
+        public static MasterData LoadMasterData()
+        {
+            var stopwatch = Stopwatch.StartNew();
+
+            try
+            {
+                var result = AtomicFileManager.LoadWithRecovery(
+                    MasterFilePath,
+                    () => new MasterData()
+                );
+
+                // Apply schema migration
+                result = MigrationService.MigrateMasterData(result);
+
+                stopwatch.Stop();
+
+                LoggingService.LogInfoStatic($"Master data loaded in {stopwatch.ElapsedMilliseconds}ms", "Perf", new {
+                    WindowCount = result.Windows?.Count ?? 0,
+                    DurationMs = stopwatch.ElapsedMilliseconds
+                });
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                LoggingService.LogErrorStatic($"Failed to load master data after {stopwatch.ElapsedMilliseconds}ms", ex, "Perf", new {
+                    FilePath = PathSanitizer.SanitizePath(MasterFilePath),
+                    DurationMs = stopwatch.ElapsedMilliseconds
+                });
+                return new MasterData();
+            }
+        }
+
+        #endregion
 
         #region Notes Management
 
@@ -608,23 +739,22 @@ namespace SnipShottyBoard.Core.Managers
                     return 0;
                 }
 
-                // Load all notes to get referenced image paths
-                var notes = LoadNotes();
+                // Load all notes from master.json to get referenced image paths
+                var master = LoadMasterData();
                 var referencedImages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                
-                foreach (var note in notes)
+
+                foreach (var window in master.Windows)
                 {
-                    if (note.ImageFiles != null)
+                    foreach (var note in window.Notes)
                     {
-                        foreach (var imagePath in note.ImageFiles)
+                        foreach (var mediaRef in note.Media)
                         {
-                            // Store full path for comparison
-                            referencedImages.Add(Path.GetFullPath(imagePath));
+                            referencedImages.Add(Path.GetFullPath(mediaRef.FullPath));
                         }
                     }
                 }
 
-                LoggingService.LogDebugStatic($"Found {referencedImages.Count} referenced images across {notes.Count} notes", "Data");
+                LoggingService.LogDebugStatic($"Found {referencedImages.Count} referenced images across {master.Windows?.Count ?? 0} windows", "Data");
 
                 // Find orphaned images
                 var cutoffDate = DateTime.Now.AddDays(-daysGracePeriod);
@@ -718,6 +848,174 @@ namespace SnipShottyBoard.Core.Managers
                 });
             }
         }
+
+        #region Recovery Journal
+
+        private static readonly string RecoveryJournalPath = Path.Combine(AppDataFolder, "master.json.recovery");
+
+        /// <summary>
+        /// 💾 Write a crash-recovery snapshot atomically.
+        /// Called every 2s while text is dirty.
+        /// </summary>
+        public static void SaveRecoverySnapshot(MasterData masterData)
+        {
+            try
+            {
+                AtomicFileManager.AtomicSave(RecoveryJournalPath, masterData, maxBackups: 2);
+            }
+            catch (Exception ex)
+            {
+                LoggingService.LogErrorStatic("Failed to save recovery snapshot", ex, "Data");
+            }
+        }
+
+        /// <summary>
+        /// 🗑️ Clear the recovery snapshot after a clean save.
+        /// </summary>
+        public static void ClearRecoverySnapshot()
+        {
+            try
+            {
+                if (File.Exists(RecoveryJournalPath))
+                    File.Delete(RecoveryJournalPath);
+            }
+            catch (Exception ex)
+            {
+                LoggingService.LogErrorStatic("Failed to clear recovery snapshot", ex, "Data");
+            }
+        }
+
+        /// <summary>
+        /// 📥 Load a recovery snapshot if it exists and is fresh enough.
+        /// Returns null if no snapshot or snapshot is too old.
+        /// </summary>
+        public static MasterData? LoadRecoverySnapshot()
+        {
+            try
+            {
+                if (!File.Exists(RecoveryJournalPath))
+                    return null;
+
+                var fileInfo = new FileInfo(RecoveryJournalPath);
+                var age = DateTime.Now - fileInfo.LastWriteTime;
+                if (age.TotalHours > AppConstants.RecoveryJournalMaxAgeHours)
+                {
+                    LoggingService.LogDebugStatic($"Recovery snapshot too old ({age.TotalHours:F1}h), ignoring", "Data");
+                    File.Delete(RecoveryJournalPath);
+                    return null;
+                }
+
+                var result = AtomicFileManager.LoadWithRecovery(
+                    RecoveryJournalPath,
+                    () => new MasterData()
+                );
+                LoggingService.LogInfoStatic($"Recovery snapshot loaded ({result.Windows?.Count ?? 0} windows)", "Data");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                LoggingService.LogErrorStatic("Failed to load recovery snapshot", ex, "Data");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 🔄 Attempt silent restore from recovery snapshot.
+        /// Called at startup BEFORE any window loads. Merges recovered text
+        /// into master.json, then deletes the recovery file.
+        /// Returns true if recovery was applied, false otherwise.
+        /// </summary>
+        public static bool TryRestoreFromRecovery()
+        {
+            try
+            {
+                var snapshot = LoadRecoverySnapshot();
+                if (snapshot == null)
+                    return false;
+
+                var saved = LoadMasterData();
+                var merged = MergeRecoveryIntoSaved(saved, snapshot);
+                SaveMasterData(merged);
+                ClearRecoverySnapshot();
+
+                LoggingService.LogInfoStatic("✅ Recovery restore complete — unsaved text recovered silently", "Data");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LoggingService.LogErrorStatic("Failed to restore from recovery", ex, "Data");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Merge recovered windows/notes into saved data.
+        /// For each recovered window (matched by ID), updates note text
+        /// from the snapshot. New windows in the snapshot are added.
+        /// </summary>
+        private static MasterData MergeRecoveryIntoSaved(MasterData saved, MasterData recovered)
+        {
+            if (saved.Windows == null)
+                saved.Windows = new List<NoteWindowData>();
+            if (recovered.Windows == null)
+                return saved;
+
+            int notesRecovered = 0;
+
+            foreach (var recWindow in recovered.Windows)
+            {
+                var savedWindow = saved.Windows.FirstOrDefault(w => w.Id == recWindow.Id);
+
+                if (savedWindow == null)
+                {
+                    // Window exists in recovery but not in saved — add it
+                    saved.Windows.Add(recWindow);
+                    notesRecovered += recWindow.Notes?.Count ?? 0;
+                    LoggingService.LogDebugStatic($"Recovery: added lost window '{recWindow.Title}' ({recWindow.Notes?.Count ?? 0} notes)", "Data");
+                    continue;
+                }
+
+                // Window exists in both — merge notes by title
+                if (recWindow.Notes == null || recWindow.Notes.Count == 0)
+                    continue;
+
+                if (savedWindow.Notes == null)
+                    savedWindow.Notes = new List<SavedNote>();
+
+                foreach (var recNote in recWindow.Notes)
+                {
+                    var savedNote = savedWindow.Notes.FirstOrDefault(
+                        n => !string.IsNullOrEmpty(n.Title) && n.Title == recNote.Title);
+
+                    if (savedNote == null)
+                    {
+                        // Note in recovery but not saved — add it
+                        savedWindow.Notes.Add(recNote);
+                        notesRecovered++;
+                        LoggingService.LogDebugStatic($"Recovery: added lost note '{recNote.Title}'", "Data");
+                    }
+                    else if (!string.IsNullOrEmpty(recNote.TextContent) && recNote.TextContent != savedNote.TextContent)
+                    {
+                        // Note exists in both — recovered text is newer
+                        savedNote.TextContent = recNote.TextContent;
+                        notesRecovered++;
+                        LoggingService.LogDebugStatic($"Recovery: restored text for note '{recNote.Title}'", "Data");
+                    }
+                }
+
+                // Update LastModified to reflect recovery
+                savedWindow.LastModified = DateTime.Now;
+            }
+
+            if (notesRecovered > 0)
+            {
+                LoggingService.LogInfoStatic($"Recovery: merged {notesRecovered} note(s) from snapshot into saved data", "Data");
+            }
+
+            return saved;
+        }
+
+        #endregion
 
         #endregion
     }

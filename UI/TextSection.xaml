@@ -6,14 +6,26 @@
              VerticalAlignment="Stretch"
              HorizontalAlignment="Stretch">
     
-    <!-- 📝 TEXT SECTION - Self-contained with flexible height -->
+    <!-- 📝 TEXT SECTION — borderless surface with focus glow -->
     <Border x:Name="TextBorder"
             Background="Transparent"
-            BorderBrush="{DynamicResource SubtleDividerBrush}"
+            BorderBrush="Transparent"
             BorderThickness="1"
-            CornerRadius="6,6,0,0"
+            CornerRadius="4"
             VerticalAlignment="Stretch"
             HorizontalAlignment="Stretch">
+        <Border.Style>
+            <Style TargetType="Border" BasedOn="{StaticResource EditorSurfaceStyle}">
+                <Style.Triggers>
+                    <!-- Focus glow ring on IsKeyboardFocusWithin -->
+                    <DataTrigger Binding="{Binding ElementName=NoteRichTextBox, Path=IsKeyboardFocusWithin}" Value="True">
+                        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                        <Setter Property="Effect" Value="{DynamicResource EditorFocusGlow}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
+
         <Grid Background="Transparent"
               VerticalAlignment="Stretch"
               HorizontalAlignment="Stretch">
@@ -48,10 +60,10 @@
                         GotKeyboardFocus="NoteRichTextBox_GotKeyboardFocus"
                         LostKeyboardFocus="NoteRichTextBox_LostKeyboardFocus">
                 <RichTextBox.Resources>
-                    <!-- 🎨 Default paragraph style to match TextBox appearance -->
+                    <!-- 🎨 Tighter line height for modern look -->
                     <Style TargetType="Paragraph">
                         <Setter Property="Margin" Value="0"/>
-                        <Setter Property="LineHeight" Value="1.2"/>
+                        <Setter Property="LineHeight" Value="1.5"/>
                     </Style>
                 </RichTextBox.Resources>
             </RichTextBox>

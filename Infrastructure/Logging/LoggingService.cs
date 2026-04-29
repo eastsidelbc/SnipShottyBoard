@@ -40,10 +40,9 @@ namespace SnipShottyBoard.Infrastructure.Logging
                         LogFilePath,
                         rollingInterval: RollingInterval.Day,
                         retainedFileCountLimit: 7,
+                        fileSizeLimitBytes: 10 * 1024 * 1024, // 10 MB per file
+                        rollOnFileSizeLimit: true,
                         outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] [{Level:u3}] {Category}: {Message:lj}{NewLine}{Exception}");
-
-                // Note: Debug sink not available in current Serilog version
-                // For Visual Studio output, use Debug.WriteLine in fallback handlers
 
                 return config.CreateLogger();
             }
@@ -139,6 +138,66 @@ namespace SnipShottyBoard.Infrastructure.Logging
                 "SnipShottyBoard", 
                 "logs");
             return logFolder;
+        }
+
+        /// <summary>
+        /// 🧹 Age-based cleanup of log files older than the retention period.
+        /// Runs at startup to handle any stale files Serilog's retainedFileCountLimit missed.
+        /// </summary>
+        /// <param name="daysRetention">Days to retain log files (default 7)</param>
+        /// <returns>Number of files deleted</returns>
+        public static int CleanupOldLogs(int daysRetention = 7)
+        {
+            try
+            {
+                var logFolder = GetLogsFolder();
+                if (!Directory.Exists(logFolder))
+                    return 0;
+
+                var cutoff = DateTime.Now.AddDays(-daysRetention);
+                var deleted = 0;
+
+                foreach (var file in Directory.GetFiles(logFolder, "*.log"))
+                {
+                    try
+                    {
+                        var info = new FileInfo(file);
+                        if (info.LastWriteTime < cutoff)
+                        {
+                            File.Delete(file);
+                            deleted++;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Failed to delete old log {file}: {ex.Message}");
+                    }
+                }
+
+                // Also clean up any non-log stray files (e.g. old backups, temp files)
+                foreach (var file in Directory.GetFiles(logFolder))
+                {
+                    if (!file.EndsWith(".log", StringComparison.OrdinalIgnoreCase))
+                    {
+                        try
+                        {
+                            File.Delete(file);
+                            deleted++;
+                        }
+                        catch
+                        {
+                            // Ignore — might be in use or a subdirectory
+                        }
+                    }
+                }
+
+                return deleted;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Log cleanup failed: {ex.Message}");
+                return 0;
+            }
         }
 
         /// <summary>

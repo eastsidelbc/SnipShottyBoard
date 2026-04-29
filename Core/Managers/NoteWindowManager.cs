@@ -55,12 +55,14 @@ namespace SnipShottyBoard.Core.Managers
             }
         }
 
-        // 💾 Save note windows data
+        // 💾 Save note windows data via master.json
         public void SaveNoteWindows()
         {
             try
             {
-                DataManager.SaveNoteWindows(NoteWindows.ToList());
+                var master = DataManager.LoadMasterData();
+                master.Windows = NoteWindows.ToList();
+                DataManager.SaveMasterData(master);
             }
             catch (Exception ex)
             {
@@ -68,20 +70,21 @@ namespace SnipShottyBoard.Core.Managers
             }
         }
 
-        // 📥 Load note windows data
+        // 📥 Load note windows data from master.json
         private void LoadNoteWindows()
         {
             try
             {
-                var windows = DataManager.LoadNoteWindows();
-                
+                var master = DataManager.LoadMasterData();
+                var windows = master.Windows ?? new List<NoteWindowData>();
+
                 foreach (var window in windows.Where(w => w.IsActive))
                 {
                     NoteWindows.Add(window);
                 }
 
                 // Don't create default window automatically - let the main window handle existing data first
-                System.Diagnostics.Debug.WriteLine($"📥 Data: Loaded {NoteWindows.Count} note windows");
+                System.Diagnostics.Debug.WriteLine($"📥 Data: Loaded {NoteWindows.Count} note windows from master.json");
             }
             catch (Exception ex)
             {

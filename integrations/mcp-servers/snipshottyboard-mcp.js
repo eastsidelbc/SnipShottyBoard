@@ -7,8 +7,12 @@ import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
 
-const PROJECT_ROOT = process.env.SSB_PROJECT_ROOT ?? 'C:\\Users\\Jeremy\\Desktop\\GitHub\\SnipShottyBoard';
+// Resolve PROJECT_ROOT dynamically: env var > script location > throw
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = process.env.SSB_PROJECT_ROOT ?? path.resolve(__dirname, '..', '..');
 
 class SnipShottyBoardMCPServer {
   constructor() {

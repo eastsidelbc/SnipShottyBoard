@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Added
+- **Single Source of Truth — master.json**: Consolidated all data into a single `master.json` file
+  - Replaces separate `notes.json` and `notewindows.json` files
+  - `MasterData` model: `{ Version, Windows: List<NoteWindowData>, Settings }`
+  - `MigrationService` handles migration from legacy format on first run
+  - Backward-compatible — legacy files preserved until migration completes
+  - See Sprint A — Data Layer Cleanup
+
+- **MediaReference Model**: Media stored as filename-only references in JSON
+  - `MediaReference` model: `{ Filename, DateAdded, FullPath (computed) }`
+  - Full path resolved at runtime from `%AppData%\SnipShottyBoard\images\`
+  - JSON file size drastically reduced (no full paths stored)
+  - `SavedNote.ImageFiles` / `ImageTimestamps` marked `[Obsolete]` with backward-compat accessors
+  - See Sprint A — Data Layer Cleanup
+
+- **Lazy-Loading Media Vault**: Thumbnails now load on-demand as they scroll into view
+  - Eliminates startup lag with large image collections
+  - Images load progressively as user scrolls through the vault
+  - Significantly reduces initial memory footprint
+  - See Sprint B — Memory & GIF Cache
+
+- **Dual-Eviction LRU Cache**: Image cache with dual limits (100 images AND 100MB)
+  - `ImageCacheManager` implements Least Recently Used eviction
+  - Evicts by count (100) OR size (100MB), whichever triggers first
+  - Prevents memory exhaustion with large image collections
+  - See Sprint B — Memory & GIF Cache
+
+- **GIF Static Thumbnails**: GIFs display as static frames in vault until opened
+  - Only full-screen ImageViewerWindow animates GIFs
+  - Dramatically reduces CPU and memory usage in Media Vault
+  - See Sprint B — Memory & GIF Cache
+
+### 🎨 Changed
+- **Visual Overhaul — Deep Dark Chrome**: Complete UI redesign with premium aesthetic
+  - **Phase 6A (Foundation)**: Deep chrome palette (#111113 background, #18181B cards)
+    - Indigo/purple gradient system (AccentGradientBrush: #6366F1 → #8B5CF6)
+    - Subtle border tints (#27272A) — zero visual noise
+    - Glow effect system (EditorFocusGlow, AccentGlowEffect)
+    - All colors via `{DynamicResource X}` — no inline hex values
+  - **Phase 6B (Tab Strip)**: Edge-style rectangular tabs with gradient underline
+    - Replaced old tab styling with modern rectangular design
+    - Active tab uses gradient underline instead of solid color
+    - Improved hover/pressed state animations
+  - **Phase 6C (Editor)**: Borderless text surface with focus glow ring
+    - Removed editor borders for clean, minimal appearance
+    - Focus state triggers subtle glow ring (EditorFocusGlow)
+    - Borderless design matches premium Notion-like aesthetic
+  - Theme tokens documented in DarkTheme.xaml (AccentBrush, AppBackgroundBrush, etc.)
+
+### 🛡️ Reliability
+- **Crash Recovery Buffer**: Silent background journaling captures unsaved text every 2 seconds
+  - `master.json.recovery` written atomically when text is dirty (2s interval)
+  - Startup auto-merges recovery snapshot silently — no modals, no prompts
+  - Recovery snapshot ignored if >1 hour old (stale data)
+  - Recovery file cleared on successful auto-save and on clean close
+  - Multi-window aware: matches recovered windows by ID, notes by title
+  - See Sprint C — Crash Recovery Buffer
+  - See Visual Overhaul 6A-6C
+
+### 🔧 Technical
+- **Data Architecture**: Single-file persistence reduces I/O complexity and corruption risk
+- **Memory Management**: LRU cache + lazy-loading + static GIF thumbnails = smooth performance with 50+ images
+- **Theme System**: All colors centralized in DarkTheme.xaml / LightTheme.xaml — no hardcoded values
+
 ---
 
 ## [1.6.0] - 2025-11-23

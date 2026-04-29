@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 namespace SnipShottyBoard.Core.Models
 {
@@ -71,28 +73,73 @@ namespace SnipShottyBoard.Core.Models
         // If this is empty, the app falls back to TextContent for plain text.
         public string RichTextContent { get; set; } = string.Empty;
 
-        // 🖼️ Image References - List of images you pasted into this note
+        // 🖼️ Media References - Structured list of media items in this note
         // 
-        // This list contains the file paths to any images you've pasted into this note.
-        // When you press Ctrl+V to paste an image, the app:
-        // 1. Saves the image as a file on your computer
-        // 2. Adds the path to that file to this list
+        // ✅ Sprint A Phase A.2: Replaces flat ImageFiles + ImageTimestamps
+        // Each entry stores just the filename (not a full path) and when it was added.
+        // Full paths are resolved at runtime via DataManager.GetImagesFolder().
         // 
-        // Example paths might look like:
-        // - "C:\Users\YourName\AppData\Roaming\SnipShottyBoard\images\image_20231215_143022_123.png"
-        // - "C:\Users\YourName\AppData\Roaming\SnipShottyBoard\images\image_20231215_143055_456.png"
-        // 
-        // WHY STORE PATHS INSTEAD OF THE ACTUAL IMAGES:
-        // Image files can be very large. Instead of storing the actual image data
-        // in this text file, we store references (paths) to where the images are saved.
-        // This keeps the save file small and fast to load.
-        public List<string> ImageFiles { get; set; } = new List<string>();
+        // Example stored JSON:
+        //   [ { "filename": "img_20260425_001234_abc.png", "dateAdded": "2026-04-25T00:12:34" } ]
+        public List<MediaReference> Media { get; set; } = new List<MediaReference>();
 
-        // 🕒 Image Timestamps - When each image was added
+        // ─── Backward-compatible accessors (deprecated — use Media) ───
+
+        // 🖼️ Legacy: full-path list — computed from Media for backward compat
         // 
-        // This dictionary maps image file paths to when they were added to the note.
-        // This allows us to show "Added: 2 hours ago" under each image for better organization.
-        public Dictionary<string, DateTime> ImageTimestamps { get; set; } = new Dictionary<string, DateTime>();
+        // ⚠️ Deprecated — consumers should migrate to Media directly.
+        // This getter resolves filenames → full paths at runtime.
+        // The setter converts full paths back into Media entries.
+        [System.Obsolete("Use Media property instead. This will be removed in v1.0.")]
+        public List<string> ImageFiles
+        {
+            get => Media.Select(m => m.FullPath).ToList();
+            set
+            {
+                if (value == null || value.Count == 0) return;
+                // Only clear if Media is empty (legacy JSON migration).
+                // If Media is already populated (new JSON format), don't overwrite.
+                if (Media.Count == 0)
+                    Media.Clear();
+                foreach (var path in value)
+                {
+                    var fileName = Path.GetFileName(path);
+                    if (!string.IsNullOrEmpty(fileName))
+                        Media.Add(new MediaReference { Filename = fileName, DateAdded = DateTime.Now });
+                }
+            }
+        }
+
+        // 🕒 Legacy: timestamp dict — computed from Media for backward compat
+        // 
+        // ⚠️ Deprecated — consumers should migrate to Media directly.
+        [System.Obsolete("Use Media property instead. This will be removed in v1.0.")]
+        public Dictionary<string, DateTime> ImageTimestamps
+        {
+            get
+            {
+                var dict = new Dictionary<string, DateTime>();
+                foreach (var m in Media)
+                    dict[m.FullPath] = m.DateAdded;
+                return dict;
+            }
+            set
+            {
+                if (value == null) return;
+                foreach (var kvp in value)
+                {
+                    var fileName = Path.GetFileName(kvp.Key);
+                    if (!string.IsNullOrEmpty(fileName))
+                    {
+                        var existing = Media.FirstOrDefault(m => m.Filename == fileName);
+                        if (existing != null)
+                            existing.DateAdded = kvp.Value;
+                        else
+                            Media.Add(new MediaReference { Filename = fileName, DateAdded = kvp.Value });
+                    }
+                }
+            }
+        }
 
         // 📐 Splitter Position - Text/Media divider ratio for THIS specific tab
         // 

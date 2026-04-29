@@ -2,19 +2,19 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
     
-    <!-- 🌙 Blue Dark Theme Colors -->
-    <Color x:Key="BackgroundColor">#FF1E2A3A</Color>  <!-- Dark blue-gray background -->
-    <Color x:Key="ForegroundColor">#FFE8F4FD</Color>  <!-- Light blue text -->
-    <Color x:Key="HeaderColor">#FF152232</Color>      <!-- Darker blue header -->
-    <Color x:Key="TabColor">#FF243447</Color>         <!-- Medium dark blue for tabs -->
-    <Color x:Key="TabStripColor">#FF2A3A4F</Color>    <!-- Lighter blue-gray for tab strip (visual separation) -->
-    <Color x:Key="BorderColor">#FF34495E</Color>      <!-- Blue-gray border -->
+    <!-- 🌑 Deep Chrome Base Colors -->
+    <Color x:Key="BackgroundColor">#FF111113</Color>    <!-- Deep solid dark — app chrome -->
+    <Color x:Key="ForegroundColor">#FFE4E4E7</Color>    <!-- Cool light text -->
+    <Color x:Key="HeaderColor">#FF111113</Color>        <!-- Same as base — flat chrome -->
+    <Color x:Key="TabColor">#FF18181B</Color>           <!-- Zinc-800 for tab surfaces -->
+    <Color x:Key="TabStripColor">#FF111113</Color>      <!-- Blends into chrome -->
+    <Color x:Key="BorderColor">#FF27272A</Color>        <!-- Zinc-700 subtle divider -->
 
     <!-- 📜 Scrollbar Colors -->
-    <Color x:Key="ScrollBarTrackColor">#20FFFFFF</Color>      <!-- Very subtle track -->
-    <Color x:Key="ScrollBarThumbColor">#40FFFFFF</Color>      <!-- Subtle thumb -->
-    <Color x:Key="ScrollBarThumbHoverColor">#60FFFFFF</Color> <!-- Visible on hover -->
-    <Color x:Key="ScrollBarThumbPressedColor">#80FFFFFF</Color> <!-- Active when pressed -->
+    <Color x:Key="ScrollBarTrackColor">#0AFFFFFF</Color>
+    <Color x:Key="ScrollBarThumbColor">#30FFFFFF</Color>
+    <Color x:Key="ScrollBarThumbHoverColor">#50FFFFFF</Color>
+    <Color x:Key="ScrollBarThumbPressedColor">#70FFFFFF</Color>
 
     <!-- 🖌️ Main App Brushes -->
     <SolidColorBrush x:Key="AppBackgroundBrush" Color="{StaticResource BackgroundColor}" />
@@ -24,14 +24,25 @@
     <SolidColorBrush x:Key="TabStripBackground" Color="{StaticResource TabStripColor}" />
     <SolidColorBrush x:Key="TabStripBorderBrush" Color="{StaticResource BorderColor}" />
     <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
-    
+
     <!-- 🎯 Action Color Brushes -->
-    <SolidColorBrush x:Key="AccentBrush" Color="#4A90E2" />           <!-- Blue accent for active elements -->
     <SolidColorBrush x:Key="DangerBrush" Color="#DC3545" />
     <SolidColorBrush x:Key="DangerTransparentBrush" Color="#C8DC3545" />
     <SolidColorBrush x:Key="DangerHoverBrush" Color="#C82333" />
     <SolidColorBrush x:Key="HoverTransparentBrush" Color="#12FFFFFF" />
-    <SolidColorBrush x:Key="ActiveTransparentBrush" Color="#33FFFFFF" />
+    <SolidColorBrush x:Key="ActiveTransparentBrush" Color="#1AFFFFFF" />
+
+    <!-- 🃏 Content Card Brush (Zinc-800 solid) -->
+    <SolidColorBrush x:Key="ContentCardBrush" Color="#FF18181B" />
+
+    <!-- 🌈 Accent Gradient — Indigo (#6366F1) to Purple (#8B5CF6) -->
+    <LinearGradientBrush x:Key="AccentGradientBrush" EndPoint="1,0">
+        <GradientStop Offset="0" Color="#6366F1"/>
+        <GradientStop Offset="1" Color="#8B5CF6"/>
+    </LinearGradientBrush>
+
+    <!-- Keep AccentBrush as solid indigo for single-color uses (borders, etc.) -->
+    <SolidColorBrush x:Key="AccentBrush" Color="#6366F1" />
 
     <!-- 📜 Scrollbar Brushes -->
     <SolidColorBrush x:Key="ScrollBarTrackBrush" Color="{StaticResource ScrollBarTrackColor}" />
@@ -253,7 +264,7 @@
                                                       Duration="0:0:0.2" />
                                         <ColorAnimation Storyboard.TargetName="ButtonBorder"
                                                       Storyboard.TargetProperty="BorderBrush.Color"
-                                                      To="#34495E"
+                                                      To="#27272A"
                                                       Duration="0:0:0.2" />
                                         <DoubleAnimation Storyboard.TargetName="ButtonScale"
                                                        Storyboard.TargetProperty="ScaleX"
@@ -329,7 +340,7 @@
             <Trigger Property="Tag" Value="Pinned">
                 <Setter Property="Background">
                     <Setter.Value>
-                        <SolidColorBrush Color="#4A90E2" /><!-- Solid blue - high contrast -->
+                        <SolidColorBrush Color="#6366F1" />
                     </Setter.Value>
                 </Setter>
                 <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
@@ -338,31 +349,38 @@
         </Style.Triggers>
     </Style>
 
-    <!-- 🏷️ Floating Tab Pill Style -->
+    <!-- 🏷️ Floating Rectangular Tab Style (Edge-inspired) -->
     <Style x:Key="TabButtonStyle" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="BorderBrush" Value="{DynamicResource SubtleDividerBrush}" />
-        <Setter Property="Foreground" Value="{DynamicResource AppForegroundBrush}" />
+        <Setter Property="Foreground" Value="#A1A1AA" />
+        <Setter Property="BorderThickness" Value="0" />
         <Setter Property="FontSize" Value="12" />
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Cursor" Value="Arrow" />
-        <Setter Property="Padding" Value="16,6" />
-        <Setter Property="Margin" Value="0,0,2,0" />
+        <Setter Property="Padding" Value="14,6" />
+        <Setter Property="Margin" Value="2,0,2,0" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Grid>
-                        <!-- Pill-shaped border with fully rounded corners -->
+                        <!-- Rectangular tab surface -->
                         <Border x:Name="TabBorder"
                                 Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="16"
+                                BorderThickness="0"
+                                CornerRadius="4"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center" />
                         </Border>
+
+                        <!-- Gradient underline (visible when active) -->
+                        <Border x:Name="ActiveUnderline"
+                                Height="2"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Bottom"
+                                Background="{DynamicResource AccentGradientBrush}"
+                                Opacity="0"
+                                CornerRadius="1" />
                     </Grid>
 
                     <ControlTemplate.Triggers>
@@ -373,7 +391,7 @@
                                     <Storyboard>
                                         <ColorAnimation Storyboard.TargetName="TabBorder"
                                                       Storyboard.TargetProperty="Background.Color"
-                                                      To="#15FFFFFF"
+                                                      To="#14FFFFFF"
                                                       Duration="0:0:0.15" />
                                     </Storyboard>
                                 </BeginStoryboard>
@@ -394,45 +412,18 @@
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="TabBorder" Property="Background">
                                 <Setter.Value>
-                                    <SolidColorBrush Color="#25FFFFFF" />
+                                    <SolidColorBrush Color="#1AFFFFFF" />
                                 </Setter.Value>
                             </Setter>
                         </Trigger>
 
-                        <!-- Selected/Active State — accent glow background + border -->
+                        <!-- Selected/Active State — gradient underline + indigo glow + brighter text -->
                         <Trigger Property="Tag" Value="Selected">
-                            <Setter Property="Background" Value="{DynamicResource TabActiveGlowBrush}" />
-                            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            <Setter Property="Foreground" Value="#E4E4E7" />
                             <Setter Property="FontWeight" Value="SemiBold" />
+                            <Setter TargetName="ActiveUnderline" Property="Opacity" Value="1" />
+                            <Setter Property="Effect" Value="{DynamicResource AccentGlowEffect}" />
                         </Trigger>
-
-                        <!-- Combined Selected + Hover — slightly brighter glow -->
-                        <MultiTrigger>
-                            <MultiTrigger.Conditions>
-                                <Condition Property="Tag" Value="Selected" />
-                                <Condition Property="IsMouseOver" Value="True" />
-                            </MultiTrigger.Conditions>
-                            <MultiTrigger.EnterActions>
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <ColorAnimation Storyboard.TargetName="TabBorder"
-                                                      Storyboard.TargetProperty="Background.Color"
-                                                      To="#504A90E2"
-                                                      Duration="0:0:0.15" />
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </MultiTrigger.EnterActions>
-                            <MultiTrigger.ExitActions>
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <ColorAnimation Storyboard.TargetName="TabBorder"
-                                                      Storyboard.TargetProperty="Background.Color"
-                                                      To="#404A90E2"
-                                                      Duration="0:0:0.2" />
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </MultiTrigger.ExitActions>
-                        </MultiTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -854,46 +845,56 @@
     <sys:Double x:Key="SmallFontSize">12</sys:Double>
     <sys:Double x:Key="HeadingFontSize">16</sys:Double>
 
-    <!-- ✨ Premium UI Resources (added for modernization) -->
-    <SolidColorBrush x:Key="CardBackgroundBrush" Color="#0AFFFFFF" />
-    <SolidColorBrush x:Key="AccentGlowBrush" Color="#304A90E2" />
-    <SolidColorBrush x:Key="TabActiveGlowBrush" Color="#404A90E2" />
-    <SolidColorBrush x:Key="SubtleDividerBrush" Color="#10FFFFFF" />
+    <!-- 🌈 Subtle Divider Brush -->
+    <SolidColorBrush x:Key="SubtleDividerBrush" Color="#14FFFFFF" />
 
-    <!-- ✨ Active Element Glow Effect -->
-    <DropShadowEffect x:Key="ActiveGlow"
-                      Color="#4A90E2"
-                      Direction="270"
+    <!-- ✨ Accent Glow Effect — Indigo glow (replaces old blue glow) -->
+    <DropShadowEffect x:Key="AccentGlowEffect"
+                      Color="#6366F1"
                       ShadowDepth="0"
-                      Opacity="0.5"
-                      BlurRadius="12"/>
+                      BlurRadius="12"
+                      Opacity="0.35"/>
+
+    <!-- ✨ Active Element Glow (for pin button active state) -->
+    <DropShadowEffect x:Key="ActiveGlow"
+                      Color="#6366F1"
+                      ShadowDepth="0"
+                      BlurRadius="12"
+                      Opacity="0.4"/>
 
     <!-- ✨ Hover Glow Effect -->
     <DropShadowEffect x:Key="HoverGlow"
                       Color="#FFFFFF"
-                      Direction="270"
                       ShadowDepth="0"
-                      Opacity="0.15"
+                      Opacity="0.08"
                       BlurRadius="8"/>
 
     <!-- ✨ Close Button Danger Glow -->
     <DropShadowEffect x:Key="DangerGlow"
                       Color="#DC3545"
-                      Direction="270"
                       ShadowDepth="0"
-                      Opacity="0.6"
+                      Opacity="0.5"
                       BlurRadius="12"/>
 
-    <!-- 🃏 Card Shadow Effect Style -->
-    <Style x:Key="CardShadowStyle">
-        <Setter Property="Panel.Background" Value="{DynamicResource CardBackgroundBrush}" />
-        <Setter Property="FrameworkElement.Margin" Value="0,4,0,4" />
+    <!-- ✨ Editor Focus Glow — softer, wider ring for text area -->
+    <DropShadowEffect x:Key="EditorFocusGlow"
+                      Color="#6366F1"
+                      ShadowDepth="0"
+                      BlurRadius="16"
+                      Opacity="0.25"/>
+
+    <!-- 🖊️ Editor Surface Style — borderless until focused -->
+    <Style x:Key="EditorSurfaceStyle" TargetType="Border">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="4" />
     </Style>
 
-    <!-- 🃏 Floating Card Container -->
+    <!-- 🃏 Content Card Container — solid zinc card with soft shadow -->
     <Style x:Key="ContentCardStyle" TargetType="Border">
-        <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
-        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Background" Value="{DynamicResource ContentCardBrush}" />
+        <Setter Property="CornerRadius" Value="6" />
         <Setter Property="Padding" Value="8" />
         <Setter Property="Margin" Value="0,4" />
         <Setter Property="Effect">
@@ -901,8 +902,8 @@
                 <DropShadowEffect Color="#000000"
                                   Direction="270"
                                   ShadowDepth="2"
-                                  Opacity="0.3"
-                                  BlurRadius="8"/>
+                                  Opacity="0.25"
+                                  BlurRadius="6"/>
             </Setter.Value>
         </Setter>
     </Style>
