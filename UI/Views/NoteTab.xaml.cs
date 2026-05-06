@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using SnipShottyBoard.Core.Models;
 using SnipShottyBoard.Data;
@@ -16,6 +17,12 @@ namespace SnipShottyBoard.UI.Views
         // ✅ Expose child components for external access
         public RichTextBox RichTextBox => TextSectionControl.RichTextBox;
         public WrapPanel ImagePanel => MediaSectionControl.ImagePanel;
+
+        // 🎯 Focus the text editor and place cursor at start
+        public void FocusEditor()
+        {
+            TextSectionControl.FocusEditor();
+        }
 
         // 💾 Properties for save/load functionality
         private string title = "";
@@ -52,10 +59,17 @@ namespace SnipShottyBoard.UI.Views
         }
 
         // 🕒 Delegate image timestamps to MediaSection
-        public Dictionary<string, DateTime> ImageTimestamps 
-        { 
+        public Dictionary<string, DateTime> ImageTimestamps
+        {
             get => MediaSectionControl.ImageTimestamps;
             set => MediaSectionControl.ImageTimestamps = value;
+        }
+
+        // 📦 Delegate media references to MediaSection (direct Media save/load bridge)
+        public List<MediaReference> MediaReferences
+        {
+            get => MediaSectionControl.MediaReferences;
+            set => MediaSectionControl.MediaReferences = value;
         }
 
         // 🔔 Event to notify when data changes (for auto-save)
@@ -269,6 +283,22 @@ namespace SnipShottyBoard.UI.Views
 
 
         #endregion
+
+        // 🎨 Media section click state — purple glow on click (no keyboard focus available)
+        private void MediaBorder_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            MediaBorder.BorderBrush = (Brush)FindResource("AccentBrush");
+            MediaBorder.Effect = (Effect)FindResource("EditorFocusGlow");
+
+            MediaBorder.MouseLeave += MediaBorder_MouseLeave;
+        }
+
+        private void MediaBorder_MouseLeave(object sender, MouseEventArgs e)
+        {
+            MediaBorder.BorderBrush = Brushes.Transparent;
+            MediaBorder.Effect = null;
+            MediaBorder.MouseLeave -= MediaBorder_MouseLeave;
+        }
 
         // 🖼️ Delegate image addition to MediaSection
         public void AddImage(Image imageControl, string imagePath)

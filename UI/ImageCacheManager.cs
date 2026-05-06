@@ -39,7 +39,16 @@ namespace SnipShottyBoard.UI
                 return null;
 
             // Move to front = most recently used
-            _lruList.Remove(node);
+            // Defensive: node may have been removed from list by concurrent RemoveAllForPath
+            try { _lruList.Remove(node); } catch { /* node already removed — safe */ }
+
+            // If node was orphaned, return null (caller will re-decode)
+            if (node.List == null)
+            {
+                _index.Remove(path);
+                return null;
+            }
+
             _lruList.AddFirst(node.Value);
             _index[path] = _lruList.First!;
 
@@ -77,7 +86,10 @@ namespace SnipShottyBoard.UI
                 return;
 
             _currentBytes -= node.Value.Bytes;
-            _lruList.Remove(node);
+
+            // Defensive: node may have been orphaned by concurrent GetFromCache
+            try { _lruList.Remove(node); } catch { /* already removed — safe */ }
+
             _index.Remove(path);
         }
 

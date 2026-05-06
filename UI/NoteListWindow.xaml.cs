@@ -14,7 +14,7 @@ namespace SnipShottyBoard.UI
     /// <summary>
     /// 📝 Window for managing multiple note windows (like Windows Sticky Notes)
     /// </summary>
-    public partial class NoteListWindow : Window
+    public partial class NoteListWindow : Wpf.Ui.Controls.FluentWindow
     {
         private readonly NoteWindowManager noteManager;
         
@@ -212,19 +212,6 @@ namespace SnipShottyBoard.UI
             if (sender is Button button && button.Tag is Guid windowId)
             {
                 CloseNoteWindow(windowId);
-            }
-        }
-
-        private void CloseButton_Click(object sender, RoutedEventArgs e)
-        {
-            this.Close();
-        }
-
-        private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
-        {
-            if (e.ChangedButton == MouseButton.Left)
-            {
-                this.DragMove();
             }
         }
 

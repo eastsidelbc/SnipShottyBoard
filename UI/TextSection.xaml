@@ -6,67 +6,46 @@
              VerticalAlignment="Stretch"
              HorizontalAlignment="Stretch">
     
-    <!-- 📝 TEXT SECTION — borderless surface with focus glow -->
-    <Border x:Name="TextBorder"
-            Background="Transparent"
-            BorderBrush="Transparent"
-            BorderThickness="1"
-            CornerRadius="4"
-            VerticalAlignment="Stretch"
-            HorizontalAlignment="Stretch">
-        <Border.Style>
-            <Style TargetType="Border" BasedOn="{StaticResource EditorSurfaceStyle}">
-                <Style.Triggers>
-                    <!-- Focus glow ring on IsKeyboardFocusWithin -->
-                    <DataTrigger Binding="{Binding ElementName=NoteRichTextBox, Path=IsKeyboardFocusWithin}" Value="True">
-                        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                        <Setter Property="Effect" Value="{DynamicResource EditorFocusGlow}" />
-                    </DataTrigger>
-                </Style.Triggers>
-            </Style>
-        </Border.Style>
-
-        <Grid Background="Transparent"
-              VerticalAlignment="Stretch"
-              HorizontalAlignment="Stretch">
-            <TextBlock x:Name="PlaceholderText"
-                      Text="Take a note..."
-                      Foreground="{DynamicResource AppForegroundBrush}"
-                      Opacity="0.35"
-                      FontStyle="Italic"
-                      FontSize="{DynamicResource BodyFontSize}"
-                      FontFamily="{DynamicResource AppFontFamily}"
-                      Margin="12,12,0,0"
-                      VerticalAlignment="Top"
-                      IsHitTestVisible="False"
-                      Visibility="Visible" />
-            <RichTextBox x:Name="NoteRichTextBox"
-                        Background="Transparent"
-                        Foreground="{DynamicResource AppForegroundBrush}"
-                        CaretBrush="{DynamicResource AppForegroundBrush}"
-                        BorderThickness="0"
-                        AcceptsReturn="True"
-                        UndoLimit="150"
-                        VerticalScrollBarVisibility="Auto"
-                        HorizontalScrollBarVisibility="Disabled"
-                        VerticalAlignment="Stretch"
-                        HorizontalAlignment="Stretch"
-                        FontSize="{DynamicResource BodyFontSize}"
-                        FontFamily="{DynamicResource AppFontFamily}"
-                        Padding="12"
-                        ScrollViewer.CanContentScroll="True"
-                        ScrollViewer.VerticalScrollBarVisibility="Auto"
-                        TextChanged="NoteRichTextBox_TextChanged"
-                        GotKeyboardFocus="NoteRichTextBox_GotKeyboardFocus"
-                        LostKeyboardFocus="NoteRichTextBox_LostKeyboardFocus">
-                <RichTextBox.Resources>
-                    <!-- 🎨 Tighter line height for modern look -->
-                    <Style TargetType="Paragraph">
-                        <Setter Property="Margin" Value="0"/>
-                        <Setter Property="LineHeight" Value="1.5"/>
-                    </Style>
-                </RichTextBox.Resources>
-            </RichTextBox>
-        </Grid>
-    </Border>
+    <!-- 📝 TEXT SECTION — purely transparent, no effects here -->
+    <!-- ALL hover and focus effects live on the outer ContentCardHoverStyle border in NoteTab.xaml -->
+    <Grid Background="Transparent"
+          VerticalAlignment="Stretch"
+          HorizontalAlignment="Stretch">
+        <TextBlock x:Name="PlaceholderText"
+                  Text="Take a note..."
+                  Foreground="{DynamicResource AppForegroundBrush}"
+                  Opacity="0.35"
+                  FontStyle="Italic"
+                  FontSize="{DynamicResource BodyFontSize}"
+                  FontFamily="{DynamicResource AppFontFamily}"
+                  Margin="4,4,0,0"
+                  VerticalAlignment="Top"
+                  IsHitTestVisible="False"
+                  Visibility="Visible" />
+        <RichTextBox x:Name="NoteRichTextBox"
+                    Background="Transparent"
+                    Foreground="{DynamicResource AppForegroundBrush}"
+                    CaretBrush="{DynamicResource AppForegroundBrush}"
+                    BorderThickness="0"
+                    AcceptsReturn="True"
+                    UndoLimit="150"
+                    VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled"
+                    VerticalContentAlignment="Top"
+                    VerticalAlignment="Stretch"
+                    HorizontalAlignment="Stretch"
+                    FontSize="{DynamicResource BodyFontSize}"
+                    FontFamily="{DynamicResource AppFontFamily}"
+                    Padding="4"
+                    TextChanged="NoteRichTextBox_TextChanged"
+                    PreviewMouseWheel="NoteRichTextBox_PreviewMouseWheel">
+            <RichTextBox.Resources>
+                <!-- 🎨 Readable line height -->
+                <Style TargetType="Paragraph">
+                    <Setter Property="Margin" Value="0"/>
+                    <Setter Property="LineHeight" Value="22"/>
+                </Style>
+            </RichTextBox.Resources>
+        </RichTextBox>
+    </Grid>
 </UserControl> 

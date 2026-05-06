@@ -36,23 +36,15 @@ namespace SnipShottyBoard.Core.Models
         #endregion
 
         #region Appearance Settings
-        // 🌙 Theme Preference - Theme name for theming system
-        // 
-        // This string value remembers your preferred theme.
-        // - "Dark" = Dark mode (dark background, light text)
-        // - "Light" = Light mode (light background, dark text)
-        // 
-        // When the app starts, it checks this value to apply your preferred theme.
+        // 🌙 Theme Preference — always Dark
+        // Light theme support has been removed. The app is dark mode only.
         public string Theme { get; set; } = "Dark";
 
-        // 🌙 Legacy Dark Mode Support - For backward compatibility
-        // 
-        // This property translates the old boolean system to the new string system.
-        // This ensures saved settings from older versions still work correctly.
+        // 🌙 Legacy Dark Mode Support — always true
         public bool IsDarkMode 
         { 
-            get => Theme == "Dark"; 
-            set => Theme = value ? "Dark" : "Light"; 
+            get => true; 
+            set { /* No-op — dark mode only */ } 
         }
 
         // 🔤 Font Size - How big the text appears

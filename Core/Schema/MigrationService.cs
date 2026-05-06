@@ -20,7 +20,7 @@ namespace SnipShottyBoard.Core.Schema
     {
         // Current schema versions — increment when model structures change
         public const int CurrentMasterVersion = 1;
-        public const int CurrentNoteSchemaVersion = 2; // 2: ImageFiles → Media (filename-only refs)
+        public const int CurrentNoteSchemaVersion = 3; // 3: per-image customization fields
         public const int CurrentWindowSchemaVersion = 1;
         public const int CurrentSettingsVersion = 1;
 
@@ -34,11 +34,22 @@ namespace SnipShottyBoard.Core.Schema
             if (notes == null)
                 return new List<SavedNote>();
 
-            var migrated = new List<SavedNote>(notes);
-
-            // Version 0 → 1: No structural changes needed for initial migration
-            // Add future version migrations here as else-if blocks:
-            // if (note.DataVersion < 2) { /* migrate 1 → 2 */ }
+            var migrated = new List<SavedNote>();
+            foreach (var note in notes)
+            {
+                var cloned = new SavedNote
+                {
+                    DataVersion = note.DataVersion,
+                    Title = note.Title,
+                    TextContent = note.TextContent,
+                    RichTextContent = note.RichTextContent,
+                    Media = note.Media != null ? new List<MediaReference>(note.Media) : new List<MediaReference>(),
+                    SplitterTextMediaRatio = note.SplitterTextMediaRatio,
+                    TabOrder = note.TabOrder
+                };
+                MigrateNoteToCurrent(cloned);
+                migrated.Add(cloned);
+            }
 
             return migrated;
         }
@@ -67,10 +78,10 @@ namespace SnipShottyBoard.Core.Schema
                         note.Title = "Note";
                 }
 
-                // Version 1 → 2: Migrate full-path ImageFiles → filename-only Media refs
+                // Version 1 → 3: Migrate full-path ImageFiles → Media refs, bump to v3
                 foreach (var note in window.Notes)
                 {
-                    MigrateNoteToMediaRefs(note);
+                    MigrateNoteToCurrent(note);
                 }
             }
 
@@ -127,18 +138,20 @@ namespace SnipShottyBoard.Core.Schema
         }
 
         /// <summary>
-        /// Migrates a single note from full-path ImageFiles to filename-only Media references.
-        /// 
-        /// Note: The actual data conversion happens automatically via the backward-compatible
-        /// ImageFiles/ImageTimestamps property setters during JSON deserialization. This method
-        /// ensures the version stamp is bumped and Media is non-null.
+        /// Migrates a single SavedNote to the current schema version.
+        /// Handles v1→v2 (full-path ImageFiles → filename-only Media refs)
+        /// and v2→v3 (per-image customization fields with defaults).
         /// </summary>
-        private static void MigrateNoteToMediaRefs(SavedNote note)
+        private static void MigrateNoteToCurrent(SavedNote note)
         {
             if (note.DataVersion < CurrentNoteSchemaVersion)
             {
                 // Ensure Media list is initialized
                 note.Media ??= new List<MediaReference>();
+
+                // v2→v3: per-image customization fields default to sensible values
+                // (ThumbnailSizeDefault, IsHidden=false, etc. — already set in MediaReference ctor)
+                // No data transformation needed — new fields use default values.
 
                 note.DataVersion = CurrentNoteSchemaVersion;
             }

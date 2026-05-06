@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using SnipShottyBoard.Core.Managers;
+using SnipShottyBoard.Core.Models;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -67,10 +68,54 @@ namespace SnipShottyBoard.UI
         }
 
         // 🕒 Property to get/set image timestamps
-        public Dictionary<string, DateTime> ImageTimestamps 
-        { 
+        public Dictionary<string, DateTime> ImageTimestamps
+        {
             get => new Dictionary<string, DateTime>(imageTimestamps);
             set => imageTimestamps = value ?? new Dictionary<string, DateTime>();
+        }
+
+        // 📦 Property to get/set media references (bridges full paths ↔ MediaReference)
+        // Used by TabManager for direct Media save/load without round-trip conversion.
+        public List<MediaReference> MediaReferences
+        {
+            get
+            {
+                var refs = new List<MediaReference>();
+                foreach (var container in ImagePanel.Children.OfType<Grid>())
+                {
+                    var refData = container.Tag as MediaReference;
+                    if (refData != null)
+                        refs.Add(refData);
+                }
+                return refs;
+            }
+            set
+            {
+                if (value == null || value.Count == 0)
+                {
+                    imageFiles.Clear();
+                    imageTimestamps.Clear();
+                    ImagePanel.Children.Clear();
+                    return;
+                }
+
+                imageFiles.Clear();
+                imageTimestamps.Clear();
+
+                var mediaRefsDict = new Dictionary<string, MediaReference>();
+                foreach (var ref_ in value)
+                {
+                    var fullPath = ref_.FullPath;
+                    if (!string.IsNullOrEmpty(fullPath) && !imageFiles.Contains(fullPath))
+                    {
+                        imageFiles.Add(fullPath);
+                        imageTimestamps[fullPath] = ref_.DateAdded;
+                        mediaRefsDict[fullPath] = ref_;
+                    }
+                }
+                LoadImagesFromFiles(mediaRefsDict);
+                OnMediaChanged?.Invoke();
+            }
         }
 
         public MediaSection()
@@ -151,7 +196,7 @@ namespace SnipShottyBoard.UI
 
         // 🎬 Helper method to create thumbnails that preserves GIF animation
         // ✅ Phase 4C P1.4: Integrated with ImageCacheManager for memory safety
-        private BitmapImage CreateThumbnailBitmap(string imagePath, int maxWidth = SnipShottyBoard.Data.AppConstants.DefaultThumbnailWidth)
+        private BitmapImage CreateThumbnailBitmap(string imagePath, int maxWidth = SnipShottyBoard.Data.AppConstants.MediaContainerWidth)
         {
             try
             {
@@ -203,7 +248,7 @@ namespace SnipShottyBoard.UI
         /// Creates a static (first-frame) thumbnail for GIFs in the Media Vault.
         /// GIFs only animate in the ImageViewerWindow, not in the vault.
         /// </summary>
-        private BitmapImage CreateStaticGifThumbnail(string imagePath, int maxWidth = SnipShottyBoard.Data.AppConstants.DefaultThumbnailWidth)
+        private BitmapImage CreateStaticGifThumbnail(string imagePath, int maxWidth = SnipShottyBoard.Data.AppConstants.MediaContainerWidth)
         {
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
@@ -216,27 +261,462 @@ namespace SnipShottyBoard.UI
             return bitmap;
         }
 
+        // === Global Context Menu (empty-space right-click) ===
+
+        private void MediaSection_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+        {
+            // If right-click landed on an image container, let its own ContextMenu open
+            var originalSource = e.OriginalSource as DependencyObject;
+            while (originalSource != null)
+            {
+                if (originalSource is Grid grid && grid.Tag is MediaReference)
+                {
+                    // Container has its own ContextMenu — do not build global menu
+                    return;
+                }
+                originalSource = VisualTreeHelper.GetParent(originalSource) as DependencyObject;
+            }
+
+            // Right-click was on empty space — build global menu
+            var menu = new ContextMenu();
+            if (Application.Current.Resources.Contains("NativeContextMenuStyle"))
+                menu.Style = (Style)Application.Current.Resources["NativeContextMenuStyle"];
+
+            // Size submenu — apply to ALL images
+            var sizeMenu = new MenuItem { Header = "Size", Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.Resize) };
+            var sizes = new (string Label, int Size)[]
+            {
+                ("Small (60px)", AppConstants.ThumbnailSizeSmall),
+                ("Medium (100px)", AppConstants.ThumbnailSizeMedium),
+                ("Big (150px)", AppConstants.ThumbnailSizeBig)
+            };
+            foreach (var (label, size) in sizes)
+            {
+                var sizeItem = new MenuItem { Header = label, IsCheckable = true };
+                var capturedSize = size;
+                sizeItem.Click += (s, ev) => SetSizeForAll(capturedSize);
+                sizeMenu.Items.Add(sizeItem);
+            }
+            menu.Items.Add(sizeMenu);
+
+            // Hide toggle — apply to ALL images
+            var anyHidden = ImagePanel.Children.OfType<Grid>()
+                .Any(g => (g.Tag as MediaReference)?.IsHidden == true);
+            var hideItem = new MenuItem
+            {
+                Header = anyHidden ? "Show All" : "Hide All",
+                Icon = CreateIcon(anyHidden ? MaterialDesignThemes.Wpf.PackIconKind.Eye : MaterialDesignThemes.Wpf.PackIconKind.EyeOff)
+            };
+            hideItem.Click += (s, ev) => ToggleHiddenForAll(anyHidden);
+            menu.Items.Add(hideItem);
+
+            // Delete All — with confirmation
+            var deleteItem = new MenuItem
+            {
+                Header = "Delete All",
+                Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.DeleteForever)
+            };
+            deleteItem.Click += (s, ev) => DeleteAllImages();
+            menu.Items.Add(deleteItem);
+
+            // Assign and open
+            ((Grid)sender).ContextMenu = menu;
+        }
+
+        private void SetSizeForAll(int newSize)
+        {
+            foreach (var container in ImagePanel.Children.OfType<Grid>().ToList())
+            {
+                var mediaRef = container.Tag as MediaReference;
+                if (mediaRef != null)
+                {
+                    mediaRef.ThumbnailSize = newSize;
+                    RebuildSingleContainer(container, mediaRef);
+                }
+            }
+            OnMediaChanged?.Invoke();
+        }
+
+        private void ToggleHiddenForAll(bool currentlyAnyHidden)
+        {
+            var targetState = !currentlyAnyHidden; // if any hidden → show all, else hide all
+            foreach (var container in ImagePanel.Children.OfType<Grid>().ToList())
+            {
+                var mediaRef = container.Tag as MediaReference;
+                if (mediaRef != null)
+                {
+                    mediaRef.IsHidden = targetState;
+                    var imageGrid = container.Children.OfType<Grid>().FirstOrDefault();
+                    if (targetState)
+                    {
+                        // Hide — show placeholder
+                        imageGrid!.Children.Clear();
+                        imageGrid.Children.Add(new TextBlock
+                        {
+                            Text = "· · ·",
+                            Foreground = (System.Windows.Media.Brush)FindResource("AppForegroundBrush"),
+                            Opacity = 0.3,
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                            VerticalAlignment = VerticalAlignment.Center,
+                            FontSize = 16
+                        });
+                    }
+                    else
+                    {
+                        // Show — rebuild with image
+                        RebuildSingleContainer(container, mediaRef);
+                    }
+                }
+            }
+            OnMediaChanged?.Invoke();
+        }
+
+        private void DeleteAllImages()
+        {
+            var ownerWindow = Window.GetWindow(this);
+            var confirmed = DialogHelper.ShowConfirmation(
+                ownerWindow,
+                "Delete all images in this note? This cannot be undone.",
+                "Delete All Images",
+                "⚠️");
+
+            if (!confirmed)
+                return;
+
+            var containers = ImagePanel.Children.OfType<Grid>().ToList();
+            foreach (var container in containers)
+            {
+                var mediaRef = container.Tag as MediaReference;
+                if (mediaRef != null)
+                {
+                    try
+                    {
+                        if (File.Exists(mediaRef.FullPath))
+                            File.Delete(mediaRef.FullPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        LoggingService.LogErrorStatic("Failed to delete image file", ex, "Media", new {
+                            FileName = PathSanitizer.SanitizePath(mediaRef.FullPath)
+                        });
+                    }
+                }
+            }
+
+            imageFiles.Clear();
+            imageTimestamps.Clear();
+            ImagePanel.Children.Clear();
+            OnMediaChanged?.Invoke();
+        }
+
+        // === UI-3.4 Context Menu Methods ===
+
+        private MaterialDesignThemes.Wpf.PackIcon CreateIcon(MaterialDesignThemes.Wpf.PackIconKind kind)
+        {
+            return new MaterialDesignThemes.Wpf.PackIcon
+            {
+                Kind = kind,
+                Width = 16,
+                Height = 16
+            };
+        }
+
+        private void SetupContainerInteractions(Grid container, string imagePath, MediaReference mediaRef)
+        {
+            // Hover effects
+            container.MouseEnter += (s, e) =>
+            {
+                if (!isDragging)
+                    container.Background = (System.Windows.Media.Brush)FindResource("HoverTransparentBrush");
+            };
+            container.MouseLeave += (s, e) =>
+            {
+                if (!isDragging)
+                    container.Background = Brushes.Transparent;
+            };
+
+            // Right-click context menu — apply dark theme style
+            var contextMenu = new ContextMenu();
+            if (Application.Current.Resources.Contains("NativeContextMenuStyle"))
+                contextMenu.Style = (Style)Application.Current.Resources["NativeContextMenuStyle"];
+
+            var copyItem = new MenuItem { Header = "Copy", Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.ContentCopy) };
+            copyItem.Click += (s, e) => CopyImageToClipboard(mediaRef.FullPath);
+            contextMenu.Items.Add(copyItem);
+
+            var deleteItem = new MenuItem { Header = "Delete", Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.Delete) };
+            deleteItem.Click += (s, e) => DeleteImageFromMenu(container, mediaRef);
+            contextMenu.Items.Add(deleteItem);
+
+            var sizeMenu = new MenuItem { Header = "Size", Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.Resize) };
+            var sizes = new (string Label, int Size)[]
+            {
+                ("Small (60px)", AppConstants.ThumbnailSizeSmall),
+                ("Medium (100px)", AppConstants.ThumbnailSizeMedium),
+                ("Big (150px)", AppConstants.ThumbnailSizeBig)
+            };
+            foreach (var (label, size) in sizes)
+            {
+                var sizeItem = new MenuItem { Header = label, IsCheckable = true, IsChecked = mediaRef.ThumbnailSize == size };
+                var capturedSize = size;
+                sizeItem.Click += (s, e) => ChangeThumbnailSize(container, mediaRef, capturedSize);
+                sizeMenu.Items.Add(sizeItem);
+            }
+            contextMenu.Items.Add(sizeMenu);
+
+            var hideItem = new MenuItem
+            {
+                Header = mediaRef.IsHidden ? "Show" : "Hide",
+                Icon = CreateIcon(mediaRef.IsHidden ? MaterialDesignThemes.Wpf.PackIconKind.Eye : MaterialDesignThemes.Wpf.PackIconKind.EyeOff)
+            };
+            hideItem.Click += (s, e) => ToggleHidden(container, mediaRef);
+            contextMenu.Items.Add(hideItem);
+
+            contextMenu.Items.Add(new Separator());
+
+            // Label toggle — static header + checkmark
+            var labelItem = new MenuItem
+            {
+                Header = "Label",
+                IsCheckable = true,
+                IsChecked = mediaRef.ShowLabel
+            };
+            labelItem.Click += (s, e) => ToggleMediaBool((MenuItem)s!, container, mediaRef, m => m.ShowLabel = (bool)((MenuItem)s!).IsChecked!);
+            contextMenu.Items.Add(labelItem);
+
+            // Date toggle — static header + checkmark
+            var dateItem = new MenuItem
+            {
+                Header = "Date",
+                IsCheckable = true,
+                IsChecked = mediaRef.ShowDate
+            };
+            dateItem.Click += (s, e) => ToggleMediaBool((MenuItem)s!, container, mediaRef, m => m.ShowDate = (bool)((MenuItem)s!).IsChecked!);
+            contextMenu.Items.Add(dateItem);
+
+            // Time toggle — static header + checkmark
+            var timeItem = new MenuItem
+            {
+                Header = "Time",
+                IsCheckable = true,
+                IsChecked = mediaRef.ShowTime
+            };
+            timeItem.Click += (s, e) => ToggleMediaBool((MenuItem)s!, container, mediaRef, m => m.ShowTime = (bool)((MenuItem)s!).IsChecked!);
+            contextMenu.Items.Add(timeItem);
+
+            contextMenu.Items.Add(new Separator());
+
+            var renameItem = new MenuItem { Header = "Rename...", Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.Edit) };
+            renameItem.Click += (s, e) => EditLabel(container, mediaRef);
+            contextMenu.Items.Add(renameItem);
+
+            container.ContextMenu = contextMenu;
+
+            // Double-click on label row to edit
+            container.MouseLeftButtonDown += (s, e) =>
+            {
+                if (e.ClickCount == 2 && e.OriginalSource is TextBlock label && Grid.GetRow(label) == 1)
+                    EditLabel(container, mediaRef);
+            };
+
+            // Drag handlers
+            AddDragHandlers(container, imagePath);
+        }
+
+        private void CopyImageToClipboard(string imagePath)
+        {
+            try
+            {
+                BitmapImage? bitmap = ImageCacheManager.Instance.GetFromCache(imagePath);
+                if (bitmap == null)
+                {
+                    bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.UriSource = new Uri(imagePath);
+                    bitmap.EndInit();
+                }
+                bitmap.Freeze();
+                System.Windows.Clipboard.SetImage(bitmap);
+            }
+            catch (Exception ex)
+            {
+                LoggingService.LogErrorStatic("Failed to copy image to clipboard", ex, "Media", new {
+                    FileName = PathSanitizer.SanitizePath(imagePath)
+                });
+            }
+        }
+
+        private void DeleteImageFromMenu(Grid container, MediaReference mediaRef)
+        {
+            var imagePath = mediaRef.FullPath;
+            try
+            {
+                if (File.Exists(imagePath))
+                    File.Delete(imagePath);
+            }
+            catch (Exception ex)
+            {
+                LoggingService.LogErrorStatic("Failed to delete image file", ex, "Media", new {
+                    FileName = PathSanitizer.SanitizePath(imagePath)
+                });
+            }
+            RemoveImageContainer(container, imagePath);
+        }
+
+        private void ChangeThumbnailSize(Grid container, MediaReference mediaRef, int newSize)
+        {
+            mediaRef.ThumbnailSize = newSize;
+            RebuildSingleContainer(container, mediaRef);
+        }
+
+        private void ToggleHidden(Grid container, MediaReference mediaRef)
+        {
+            mediaRef.IsHidden = !mediaRef.IsHidden;
+            var imageGrid = container.Children.OfType<Grid>().First();
+            if (mediaRef.IsHidden)
+            {
+                imageGrid.Children.Clear();
+                imageGrid.Children.Add(new TextBlock
+                {
+                    Text = "· · ·",
+                    Foreground = (System.Windows.Media.Brush)FindResource("AppForegroundBrush"),
+                    Opacity = 0.3,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    FontSize = 16
+                });
+            }
+            else
+            {
+                RebuildSingleContainer(container, mediaRef);
+            }
+            OnMediaChanged?.Invoke();
+        }
+
+        private void ToggleMediaBool(MenuItem menuItem, Grid container, MediaReference mediaRef, Action<MediaReference> setProperty)
+        {
+            setProperty(mediaRef);
+            UpdateContainerVisibility(container, mediaRef);
+            OnMediaChanged?.Invoke();
+        }
+
+        private void UpdateContainerVisibility(Grid container, MediaReference mediaRef)
+        {
+            // Update label row (Row 1)
+            var labelBlock = container.Children.OfType<TextBlock>()
+                .FirstOrDefault(tb => Grid.GetRow(tb) == 1);
+            if (labelBlock != null)
+            {
+                labelBlock.Visibility = (mediaRef.ShowLabel && !string.IsNullOrEmpty(mediaRef.Label))
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+                labelBlock.Text = mediaRef.Label;
+            }
+
+            // Update timestamp row (Row 2)
+            var timestampBlock = container.Children.OfType<TextBlock>()
+                .FirstOrDefault(tb => Grid.GetRow(tb) == 2);
+            if (timestampBlock != null)
+            {
+                var newText = CreateTimestampText(mediaRef);
+                int idx = container.Children.IndexOf(timestampBlock);
+                container.Children.RemoveAt(idx);
+                container.Children.Insert(idx, newText);
+                Grid.SetRow(newText, 2);
+            }
+        }
+
+        private void UpdateTimestampText(Grid container, MediaReference mediaRef)
+        {
+            var timestampBlock = container.Children.OfType<TextBlock>()
+                .FirstOrDefault(tb => Grid.GetRow(tb) == 2);
+            if (timestampBlock != null)
+            {
+                var newText = CreateTimestampText(mediaRef);
+                int idx = container.Children.IndexOf(timestampBlock);
+                container.Children.RemoveAt(idx);
+                container.Children.Insert(idx, newText);
+                Grid.SetRow(newText, 2);
+            }
+        }
+
+        private void EditLabel(Grid container, MediaReference mediaRef)
+        {
+            var result = CustomInputDialog.ShowInput(
+                Window.GetWindow(this),
+                "Enter label for this image:",
+                "Rename Image",
+                mediaRef.Label,
+                "✏️");
+
+            if (result.success && result.input != null)
+            {
+                mediaRef.Label = result.input.Trim();
+                mediaRef.ShowLabel = !string.IsNullOrEmpty(mediaRef.Label);
+
+                var labelBlock = container.Children.OfType<TextBlock>()
+                    .FirstOrDefault(tb => Grid.GetRow(tb) == 1);
+
+                if (labelBlock != null)
+                {
+                    labelBlock.Text = mediaRef.Label;
+                    labelBlock.Visibility = mediaRef.ShowLabel ? Visibility.Visible : Visibility.Collapsed;
+                }
+
+                OnMediaChanged?.Invoke();
+            }
+        }
+
+        private void RebuildSingleContainer(Grid container, MediaReference mediaRef)
+        {
+            var panel = container.Parent as WrapPanel;
+            if (panel == null) return;
+
+            var oldIndex = panel.Children.IndexOf(container);
+            var imagePath = mediaRef.FullPath;
+
+            panel.Children.Remove(container);
+
+            var newContainer = CreatePlaceholderContainer(imagePath, mediaRef);
+            if (oldIndex >= panel.Children.Count)
+                panel.Children.Add(newContainer);
+            else
+                panel.Children.Insert(oldIndex, newContainer);
+
+            EnsureThumbnailLoaded(newContainer, imagePath, mediaRef.DateAdded, mediaRef);
+            OnMediaChanged?.Invoke();
+        }
+
         /// <summary>
         /// Creates a placeholder container (no image decoded yet). The async loader
         /// replaces the placeholder once the thumbnail is ready.
         /// </summary>
-        private Grid CreatePlaceholderContainer(string imagePath)
+        private Grid CreatePlaceholderContainer(string imagePath, MediaReference? mediaRef = null)
         {
+            var refData = mediaRef ?? new MediaReference
+            {
+                Filename = Path.GetFileName(imagePath),
+                DateAdded = DateTime.Now
+            };
+            int containerWidth = refData.ThumbnailSize;
+
             var container = new Grid
             {
-                Width = SnipShottyBoard.Data.AppConstants.MediaContainerWidth,
-                MinHeight = SnipShottyBoard.Data.AppConstants.MediaContainerMinHeight,
+                Width = containerWidth,
+                MinHeight = CalculateMinHeight(containerWidth),
                 Margin = new Thickness(5),
                 Background = (System.Windows.Media.Brush)FindResource("ContentCardBrush")
             };
-            container.Tag = imagePath;
+            container.Tag = refData;
 
-            // Row definitions
-            container.RowDefinitions.Add(new RowDefinition { Height = new GridLength(SnipShottyBoard.Data.AppConstants.MediaThumbnailHeight) });
+            // 3-row layout: Image (auto), Label (auto), Timestamp (auto)
+            container.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            container.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             container.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            // Placeholder image area
-            var imageGrid = new Grid();
+            // Row 0: Placeholder image area
+            var imageGrid = new Grid { MinHeight = containerWidth - 10 };
             imageGrid.Children.Add(new TextBlock
             {
                 Text = "· · ·",
@@ -249,44 +729,48 @@ namespace SnipShottyBoard.UI
             Grid.SetRow(imageGrid, 0);
             container.Children.Add(imageGrid);
 
-            // Timestamp footer
-            var timestampText = new TextBlock
+            // Row 1: Label (conditionally visible)
+            var labelText = new TextBlock
             {
+                Text = refData.Label,
                 FontSize = SnipShottyBoard.Data.AppConstants.SmallFontSize,
                 Foreground = (System.Windows.Media.Brush)FindResource("AppForegroundBrush"),
                 Opacity = 0.7,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(2, 4, 2, 2),
+                Margin = new Thickness(2, 2, 2, 0),
                 TextWrapping = TextWrapping.Wrap,
                 TextAlignment = TextAlignment.Center,
-                Text = "loading…"
+                Visibility = (refData.ShowLabel && !string.IsNullOrEmpty(refData.Label))
+                    ? Visibility.Visible
+                    : Visibility.Collapsed
             };
-            Grid.SetRow(timestampText, 1);
+            Grid.SetRow(labelText, 1);
+            container.Children.Add(labelText);
+
+            // Row 2: Timestamp
+            var timestampText = CreateTimestampText(refData, "loading…");
+            Grid.SetRow(timestampText, 2);
             container.Children.Add(timestampText);
 
-            // 🖱️ Hover effects
-            container.MouseEnter += (s, e) =>
-            {
-                if (!isDragging)
-                    container.Background = (System.Windows.Media.Brush)FindResource("HoverTransparentBrush");
-            };
-            container.MouseLeave += (s, e) =>
-            {
-                if (!isDragging)
-                    container.Background = Brushes.Transparent;
-            };
-
-            // 🎯 Drag handlers
-            AddDragHandlers(container, imagePath);
+            SetupContainerInteractions(container, imagePath, refData);
 
             return container;
+        }
+
+        /// <summary>
+        /// Calculate the minimum height for a container based on its width.
+        /// Maintains a roughly square aspect ratio for the image area.
+        /// </summary>
+        private int CalculateMinHeight(int containerWidth)
+        {
+            return containerWidth + 20; // Image area + label + timestamp overhead
         }
 
         /// <summary>
         /// Asynchronously loads a thumbnail and replaces the placeholder in the container.
         /// Limited to 4 concurrent decodes via _loadSemaphore.
         /// </summary>
-        private async Task LoadThumbnailAsync(Grid container, string imagePath, DateTime? timestamp)
+        private async Task LoadThumbnailAsync(Grid container, string imagePath, DateTime? timestamp, MediaReference? mediaRef = null)
         {
             await _loadSemaphore.WaitAsync();
 
@@ -325,15 +809,20 @@ namespace SnipShottyBoard.UI
                     // Cache the bitmap
                     ImageCacheManager.Instance.AddToCache(imagePath, bitmap);
 
+                    // Get the MediaReference from the container tag
+                    var refData = container.Tag as MediaReference
+                        ?? new MediaReference { Filename = Path.GetFileName(imagePath), DateAdded = timestamp ?? DateTime.Now };
+
                     // Replace placeholder content with actual image
                     var imageGrid = container.Children.OfType<Grid>().First();
                     imageGrid.Children.Clear();
 
+                    var containerWidth = refData.ThumbnailSize;
                     var image = new Image
                     {
                         Source = bitmap,
-                        MaxWidth = 80,
-                        MaxHeight = 80,
+                        MaxWidth = containerWidth,
+                        MaxHeight = containerWidth - 10,
                         Stretch = Stretch.Uniform,
                         HorizontalAlignment = HorizontalAlignment.Center,
                         VerticalAlignment = VerticalAlignment.Center,
@@ -341,11 +830,12 @@ namespace SnipShottyBoard.UI
                     };
                     imageGrid.Children.Add(image);
 
-                    // Update timestamp
-                    var timestampText = container.Children.OfType<TextBlock>().FirstOrDefault();
-                    if (timestampText != null && timestamp.HasValue)
+                    // Update timestamp text (row 2 — the last TextBlock)
+                    var timestampText = container.Children.OfType<TextBlock>()
+                        .LastOrDefault(tb => Grid.GetRow(tb) == 2);
+                    if (timestampText != null)
                     {
-                        timestampText.Text = GetTimeAgoString(timestamp.Value);
+                        timestampText.Text = CreateTimestampText(refData).Text;
                     }
                 });
             }
@@ -366,93 +856,109 @@ namespace SnipShottyBoard.UI
         }
 
         /// <summary>
+        /// Create a TextBlock displaying the timestamp based on MediaReference visibility settings.
+        /// Falls back to a default combined date+time string if no ref is available.
+        /// </summary>
+        private TextBlock CreateTimestampText(MediaReference mediaRef, string? overrideText = null)
+        {
+            string displayText;
+            if (overrideText != null)
+            {
+                displayText = overrideText;
+            }
+            else
+            {
+                var dateStr = mediaRef.ShowDate ? mediaRef.DateAdded.ToString("M/d/yy") : "";
+                var timeStr = mediaRef.ShowTime ? mediaRef.DateAdded.ToString("h:mmtt").ToLower() : "";
+                var parts = new[] { dateStr, timeStr }.Where(s => !string.IsNullOrEmpty(s));
+                displayText = string.Join(" ", parts);
+            }
+
+            return new TextBlock
+            {
+                Text = displayText,
+                FontSize = SnipShottyBoard.Data.AppConstants.SmallFontSize,
+                Foreground = (System.Windows.Media.Brush)FindResource("AppForegroundBrush"),
+                Opacity = 0.7,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(2, 2, 2, 2),
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center,
+                Visibility = string.IsNullOrEmpty(displayText) ? Visibility.Collapsed : Visibility.Visible
+            };
+        }
+
+        /// <summary>
         /// Fire-and-forget: starts async thumbnail load for a path.
         /// Uses cancellation token to clean up on Dispose.
         /// </summary>
-        private void EnsureThumbnailLoaded(Grid container, string imagePath, DateTime? timestamp)
+        private void EnsureThumbnailLoaded(Grid container, string imagePath, DateTime? timestamp, MediaReference? mediaRef = null)
         {
             _pendingLoadsCts?.Cancel();
             _pendingLoadsCts = new CancellationTokenSource();
 
             // Fire and forget — the method handles its own errors
-            _ = Task.Run(() => LoadThumbnailAsync(container, imagePath, timestamp));
+            _ = Task.Run(() => LoadThumbnailAsync(container, imagePath, timestamp, mediaRef));
         }
 
-        // 📦 Create image container with timestamp and drag support (delete button handled separately)
-        private Grid CreateImageContainer(Image imageControl, string imagePath)
+        // 📦 Create image container with 3-row layout and drag support
+        private Grid CreateImageContainer(Image imageControl, string imagePath, MediaReference? mediaRef = null)
         {
+            var refData = mediaRef ?? new MediaReference
+            {
+                Filename = Path.GetFileName(imagePath),
+                DateAdded = imageTimestamps.ContainsKey(imagePath) ? imageTimestamps[imagePath] : DateTime.Now
+            };
+            int containerWidth = refData.ThumbnailSize;
+
             var container = new Grid
             {
-                Width = SnipShottyBoard.Data.AppConstants.MediaContainerWidth,
-                MinHeight = SnipShottyBoard.Data.AppConstants.MediaContainerMinHeight,
+                Width = containerWidth,
+                MinHeight = CalculateMinHeight(containerWidth),
                 Margin = new Thickness(5),
                 Background = Brushes.Transparent
             };
 
-            // 📋 Store image path as tag for identification
-            container.Tag = imagePath;
+            // Store full MediaReference on the container tag
+            container.Tag = refData;
 
-            // Add row definitions for image and timestamp
-            container.RowDefinitions.Add(new RowDefinition { Height = new GridLength(SnipShottyBoard.Data.AppConstants.MediaThumbnailHeight) });
+            // 3-row layout: Image (auto), Label (auto), Timestamp (auto)
+            container.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            container.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             container.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            // 🖼️ Image area
-            var imageGrid = new Grid();
+            // Row 0: Image area
+            var imageGrid = new Grid { MinHeight = containerWidth - 10 };
             imageControl.HorizontalAlignment = HorizontalAlignment.Center;
             imageControl.VerticalAlignment = VerticalAlignment.Center;
             imageGrid.Children.Add(imageControl);
             Grid.SetRow(imageGrid, 0);
             container.Children.Add(imageGrid);
 
-            // 🕒 Timestamp footer
-            var timestampText = new TextBlock
+            // Row 1: Label (conditionally visible)
+            var labelText = new TextBlock
             {
+                Text = refData.Label,
                 FontSize = SnipShottyBoard.Data.AppConstants.SmallFontSize,
                 Foreground = (System.Windows.Media.Brush)FindResource("AppForegroundBrush"),
                 Opacity = 0.7,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(2, 4, 2, 2),
+                Margin = new Thickness(2, 2, 2, 0),
                 TextWrapping = TextWrapping.Wrap,
-                TextAlignment = TextAlignment.Center
+                TextAlignment = TextAlignment.Center,
+                Visibility = (refData.ShowLabel && !string.IsNullOrEmpty(refData.Label))
+                    ? Visibility.Visible
+                    : Visibility.Collapsed
             };
+            Grid.SetRow(labelText, 1);
+            container.Children.Add(labelText);
 
-            // Get timestamp for this image
-            if (imageTimestamps.ContainsKey(imagePath))
-            {
-                var timestamp = GetTimeAgoString(imageTimestamps[imagePath]);
-                timestampText.Text = timestamp;
-            }
-            else
-            {
-                // Fallback to current time if timestamp not found
-                var currentTime = DateTime.Now.ToString("M/d/yy h:mmtt").ToLower();
-                timestampText.Text = currentTime;
-            }
-
-            Grid.SetRow(timestampText, 1);
+            // Row 2: Timestamp
+            var timestampText = CreateTimestampText(refData);
+            Grid.SetRow(timestampText, 2);
             container.Children.Add(timestampText);
 
-            // 🖱️ Hover effects 
-            container.MouseEnter += (s, e) =>
-            {
-                if (!isDragging)
-                {
-                    container.Background = (System.Windows.Media.Brush)FindResource("HoverTransparentBrush");
-                }
-            };
-
-            container.MouseLeave += (s, e) =>
-            {
-                if (!isDragging)
-                {
-                    container.Background = Brushes.Transparent;
-                }
-            };
-
-            // 🖱️ Single-click anywhere in container to view full size (handled in drag logic)
-
-            // 🎯 Add drag and drop event handlers
-            AddDragHandlers(container, imagePath);
+            SetupContainerInteractions(container, imagePath, refData);
 
             return container;
         }
@@ -979,8 +1485,16 @@ namespace SnipShottyBoard.UI
                     if (!DataManager.ValidateImageFile(imagePath))
                         continue;
 
+                    // Build MediaReference from current data (preserves v3 metadata)
+                    var timestamp = imageTimestamps.TryGetValue(imagePath, out var ts) ? ts : DateTime.Now;
+                    var mediaRef = new MediaReference
+                    {
+                        Filename = Path.GetFileName(imagePath),
+                        DateAdded = timestamp
+                    };
+
                     // 📦 Add placeholder container (instant, no decode)
-                    var container = CreatePlaceholderContainer(imagePath);
+                    var container = CreatePlaceholderContainer(imagePath, mediaRef);
                     ImagePanel.Children.Add(container);
 
                     // Restore dragged container reference if this is the dragged item
@@ -999,8 +1513,7 @@ namespace SnipShottyBoard.UI
                     }
 
                     // 🚀 Start async thumbnail load (fire-and-forget, semaphore-limited)
-                    var timestamp = imageTimestamps.TryGetValue(imagePath, out var ts) ? ts : (DateTime?)null;
-                    EnsureThumbnailLoaded(container, imagePath, timestamp);
+                    EnsureThumbnailLoaded(container, imagePath, timestamp, mediaRef);
                 }
                 catch (Exception ex)
                 {
@@ -1080,7 +1593,7 @@ namespace SnipShottyBoard.UI
         }
 
         // 📂 Load images from file paths — uses lazy async loading (Sprint B B.1)
-        private void LoadImagesFromFiles()
+        private void LoadImagesFromFiles(Dictionary<string, MediaReference>? mediaRefsDict = null)
         {
             ImagePanel.Children.Clear();
 
@@ -1092,17 +1605,30 @@ namespace SnipShottyBoard.UI
                     var imageInfo = DataManager.GetImageInfo(imagePath);
                     if (imageInfo.HasValue && imageInfo.Value.exists)
                     {
-                        // 🕒 Use file creation time as timestamp for existing images
-                        var fileInfo = new FileInfo(imagePath);
-                        var timestamp = fileInfo.CreationTime;
-                        imageTimestamps[imagePath] = timestamp;
+                        // Use provided MediaReference or build from file
+                        MediaReference mediaRef;
+                        if (mediaRefsDict != null && mediaRefsDict.TryGetValue(imagePath, out var existingRef))
+                        {
+                            mediaRef = existingRef;
+                        }
+                        else
+                        {
+                            var fileInfo = new FileInfo(imagePath);
+                            var timestamp = fileInfo.CreationTime;
+                            imageTimestamps[imagePath] = timestamp;
+                            mediaRef = new MediaReference
+                            {
+                                Filename = Path.GetFileName(imagePath),
+                                DateAdded = timestamp
+                            };
+                        }
 
                         // 📦 Add placeholder container (instant, no decode)
-                        var container = CreatePlaceholderContainer(imagePath);
+                        var container = CreatePlaceholderContainer(imagePath, mediaRef);
                         ImagePanel.Children.Add(container);
 
                         // 🚀 Start async thumbnail load (fire-and-forget, semaphore-limited)
-                        EnsureThumbnailLoaded(container, imagePath, timestamp);
+                        EnsureThumbnailLoaded(container, imagePath, mediaRef.DateAdded, mediaRef);
                     }
                 }
                 catch (Exception ex)
@@ -1132,13 +1658,20 @@ namespace SnipShottyBoard.UI
                     System.Diagnostics.Debug.WriteLine($"🎬 MEDIASECTION: About to create ImageViewerWindow for GIF");
                 }
                 
-                // 🔍 Find current image index for navigation
-                var currentIndex = imageFiles.IndexOf(imagePath);
-                System.Diagnostics.Debug.WriteLine($"🖼️ Current image index: {currentIndex} of {imageFiles.Count} total images");
-                
-                // 🔗 Create viewer with navigation support
+                // Read image paths directly from what's rendered in the UI (eliminates ghost paths)
+                var validImages = ImagePanel.Children
+                    .OfType<Grid>()
+                    .Select(container => (container.Tag as MediaReference)?.FullPath)
+                    .Where(path => !string.IsNullOrEmpty(path))
+                    .ToList();
+
+                // Find clicked image position within visible thumbnails
+                var currentIndex = validImages.IndexOf(imagePath);
+                System.Diagnostics.Debug.WriteLine($"🖼️ Current image index: {currentIndex} of {validImages.Count} visible images");
+
+                // 🔗 Create viewer with clean navigation list (only displayed thumbnails)
                 System.Diagnostics.Debug.WriteLine($"🖼️ Creating ImageViewerWindow...");
-                var imageViewer = new ImageViewerWindow(imagePath, imageFiles, currentIndex, RemoveImageByPath);
+                var imageViewer = new ImageViewerWindow(imagePath, validImages, currentIndex, RemoveImageByPath);
                 System.Diagnostics.Debug.WriteLine($"🖼️ ImageViewerWindow created successfully");
                 
                 // 🎯 Position window to not cover the main app
@@ -1184,7 +1717,7 @@ namespace SnipShottyBoard.UI
             {
                 // 🔍 Find and remove container instantly
                 var containerToRemove = ImagePanel.Children.OfType<Grid>()
-                    .FirstOrDefault(container => container.Tag as string == imagePath);
+                    .FirstOrDefault(container => (container.Tag as MediaReference)?.FullPath == imagePath);
                 
                 if (containerToRemove != null)
                 {

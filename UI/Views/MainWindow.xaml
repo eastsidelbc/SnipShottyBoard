@@ -1,4 +1,4 @@
-﻿<Window x:Class="SnipShottyBoard.UI.Views.MainWindow"
+﻿<ui:FluentWindow x:Class="SnipShottyBoard.UI.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:SnipShottyBoard"
@@ -7,266 +7,177 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         Height="500" Width="400" MinHeight="300" MinWidth="250"
-        Background="Transparent"
-        WindowStyle="None"
-        AllowsTransparency="True"
         ResizeMode="CanResize"
-        Icon="/assets/app.ico">
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="None"
+        WindowCornerPreference="Round"
+        Background="{DynamicResource AppBackgroundBrush}">
 
-    <!-- 🎯 Modern Window Chrome for Resizing + Custom Header -->
-    <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="32" 
-                      ResizeBorderThickness="8" 
-                      UseAeroCaptionButtons="False"
-                      NonClientFrameEdges="None"
-                      GlassFrameThickness="0"
-                      CornerRadius="12" />
-    </WindowChrome.WindowChrome>
+    <Grid Background="{DynamicResource AppBackgroundBrush}">
+        <Grid.RowDefinitions>
+            <!-- 🎯 FluentWindow Native Title Bar (auto-height) -->
+            <RowDefinition Height="Auto" />
+            <!-- 📑 Tab Strip -->
+            <RowDefinition Height="Auto" />
+            <!-- 📝 Main Content -->
+            <RowDefinition Height="*" />
+            <!-- 📊 Status Bar -->
+            <RowDefinition Height="28" />
+        </Grid.RowDefinitions>
 
-    <!-- 🏗️ Modern Container with Drop Shadow, Rounded Corners + Fade-In -->
-    <Border x:Name="RootBorder"
-            Background="{DynamicResource AppBackgroundBrush}"
-            BorderBrush="{DynamicResource BorderBrush}"
-            BorderThickness="1"
-            CornerRadius="12"
-            Opacity="0">
-        <Border.Effect>
-            <DropShadowEffect Color="Black" Direction="270" ShadowDepth="4" Opacity="0.6" BlurRadius="12"/>
-        </Border.Effect>
-        <Border.Triggers>
-            <!-- 🌟 Fade-in on load (300ms) -->
-            <EventTrigger RoutedEvent="Loaded">
-                <BeginStoryboard>
-                    <Storyboard>
-                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                       From="0" To="1"
-                                       Duration="0:0:0.3">
-                            <DoubleAnimation.EasingFunction>
-                                <CubicEase EasingMode="EaseOut" />
-                            </DoubleAnimation.EasingFunction>
-                        </DoubleAnimation>
-                    </Storyboard>
-                </BeginStoryboard>
-            </EventTrigger>
-        </Border.Triggers>
-        
-        <Grid>
-            <Grid.RowDefinitions>
-                <!-- 📊 Custom Header Bar -->
-                <RowDefinition Height="32" />
-                <!-- 📑 Tab Strip -->
-                <RowDefinition Height="Auto" />
-                <!-- 📝 Main Content -->
-                <RowDefinition Height="*" />
-                <!-- 📊 Status Bar -->
-                <RowDefinition Height="28" />
-            </Grid.RowDefinitions>
+        <!-- 🎯 FluentWindow Native Title Bar — merged action buttons + pin + system caption -->
+        <ui:TitleBar x:Name="MainTitleBar"
+                     Grid.Row="0"
+                     Title="SnipShottyBoard"
+                     Background="{DynamicResource AppBackgroundBrush}"
+                     Padding="0">
+            <ui:TitleBar.Header>
+                <StackPanel Orientation="Horizontal" Margin="4,0,0,0" VerticalAlignment="Top">
+                    <!-- New Note — leftmost, near window corner -->
+                    <Button Style="{DynamicResource TitleBarButtonStyle}"
+                            Click="NewTab_Click"
+                            ToolTip="New note (Ctrl+N)">
+                        <materialDesign:PackIcon Kind="PlusBoxOutline" Width="16" Height="16" />
+                    </Button>
 
-            <!-- 🎯 Flat Header Bar — blends into deep chrome -->
-            <Border Grid.Row="0"
-                    Background="{DynamicResource AppBackgroundBrush}"
-                    BorderBrush="{DynamicResource SubtleDividerBrush}"
-                    BorderThickness="0,0,0,1">
-                <Grid>
+                    <!-- Manage Note Windows -->
+                    <Button Style="{DynamicResource TitleBarButtonStyle}"
+                            Click="NoteWindows_Click"
+                            ToolTip="Manage note windows">
+                        <materialDesign:PackIcon Kind="WindowMaximize" Width="16" Height="16" />
+                    </Button>
 
+                    <!-- Delete Current Tab -->
+                    <Button Style="{DynamicResource TitleBarButtonStyle}"
+                            Click="DeleteTab_Click"
+                            ToolTip="Delete current tab">
+                        <materialDesign:PackIcon Kind="TrashCanOutline" Width="16" Height="16" />
+                    </Button>
+
+                    <!-- Settings -->
+                    <Button Style="{DynamicResource TitleBarButtonStyle}"
+                            Click="Settings_Click"
+                            ToolTip="Settings (Ctrl+,)">
+                        <materialDesign:PackIcon Kind="CogOutline" Width="16" Height="16" />
+                    </Button>
+
+                    <!-- Help -->
+                    <Button Style="{DynamicResource TitleBarButtonStyle}"
+                            Click="Help_Click"
+                            ToolTip="Features and shortcuts">
+                        <materialDesign:PackIcon Kind="HelpCircleOutline" Width="16" Height="16" />
+                    </Button>
+
+                    <!-- Developer Tools -->
+                    <Button Style="{DynamicResource TitleBarButtonStyle}"
+                            Click="Developer_Click"
+                            ToolTip="Developer tools (logs, diagnostics)">
+                        <materialDesign:PackIcon Kind="WrenchOutline" Width="16" Height="16" />
+                    </Button>
+                </StackPanel>
+            </ui:TitleBar.Header>
+
+            <ui:TitleBar.TrailingContent>
+                <Button x:Name="PinButton"
+                        Style="{DynamicResource TitleBarPinButtonStyle}"
+                        Click="Pin_Click"
+                        ToolTip="Always on top: Off">
+                    <materialDesign:PackIcon Kind="PinOutline" Width="16" Height="16" />
+                </Button>
+            </ui:TitleBar.TrailingContent>
+        </ui:TitleBar>
+
+        <!-- 📑 Tab Strip — flat chrome, tabs float via contrast -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource AppBackgroundBrush}"
+                BorderBrush="{DynamicResource SubtleDividerBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="4,4,4,2">
+
+            <ScrollViewer Background="Transparent"
+                          MaxHeight="200"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+
+                <!-- 🏷️ Custom Tab Header Panel with Multi-Row Wrapping -->
+                <WrapPanel x:Name="TabHeaderPanel"
+                           Orientation="Horizontal"
+                           Margin="4,2"
+                           Background="Transparent" />
+            </ScrollViewer>
+        </Border>
+
+        <!-- 📝 Main Content Area — solid zinc card with depth shadow -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource ContentCardBrush}"
+                CornerRadius="6"
+                Margin="4,0,4,2"
+                BorderBrush="{DynamicResource SubtleDividerBrush}"
+                BorderThickness="1,1,1,0">
+            <Border.Effect>
+                <DropShadowEffect Color="#000000"
+                                  Direction="270"
+                                  ShadowDepth="2"
+                                  Opacity="0.2"
+                                  BlurRadius="6"/>
+            </Border.Effect>
+
+            <!-- 🔗 Tab Content Display -->
+            <ContentPresenter x:Name="TabContentArea"
+                              VerticalAlignment="Stretch"
+                              HorizontalAlignment="Stretch" />
+        </Border>
+
+        <!-- 📊 Modern Status Bar -->
+        <Border Grid.Row="3"
+                Background="{DynamicResource HeaderBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,1,0,0">
+            <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />  <!-- + button -->
-                    <ColumnDefinition Width="*" />     <!-- Draggable area -->
-                    <ColumnDefinition Width="Auto" />  <!-- 📝 note windows button -->
-                    <ColumnDefinition Width="Auto" />  <!-- ⚙️ settings button -->
-                    <ColumnDefinition Width="Auto" />  <!-- 🗑️ delete button -->
-                    <ColumnDefinition Width="Auto" />  <!-- Theme toggle -->
-                    <ColumnDefinition Width="Auto" />  <!-- ℹ️ help button -->
-                    <ColumnDefinition Width="Auto" />  <!-- 🔧 developer button -->
-                    <ColumnDefinition Width="Auto" />  <!-- 📌 pin button (always on top) -->
-                    <ColumnDefinition Width="Auto" />  <!-- − minimize button -->
-                    <ColumnDefinition Width="Auto" />  <!-- × close button -->
+                    <ColumnDefinition Width="Auto" />  <!-- Tab count -->
+                    <ColumnDefinition Width="*" />     <!-- Spacer -->
+                    <ColumnDefinition Width="Auto" />  <!-- Word count -->
+                    <ColumnDefinition Width="Auto" />  <!-- Save status -->
+                    <ColumnDefinition Width="Auto" />  <!-- Current time -->
                 </Grid.ColumnDefinitions>
 
-                <!-- ➕ New Tab Button -->
-                <Button Grid.Column="0" 
-                        Content="+"
-                        Style="{DynamicResource HeaderButtonStyle}"
-                        Click="NewTab_Click"
-                        ToolTip="New note"
-                        WindowChrome.IsHitTestVisibleInChrome="True" />
+                <!-- 📑 Tab count -->
+                <TextBlock x:Name="TabCountStatus"
+                           Grid.Column="0"
+                           Text="1 tab"
+                           FontSize="11"
+                           Foreground="{DynamicResource AppForegroundBrush}"
+                           VerticalAlignment="Center"
+                           Margin="8,0,0,0" />
 
-                <!-- 📍 Draggable Title Area (WindowChrome handles this) -->
-                <Grid Grid.Column="1" Background="Transparent" />
+                <!-- 📝 Word count -->
+                <TextBlock x:Name="WordCountStatus"
+                           Grid.Column="2"
+                           Text="0 words"
+                           FontSize="11"
+                           Foreground="{DynamicResource AppForegroundBrush}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0" />
 
-                <!-- 📝 Note Windows Button -->
-                <Button Grid.Column="2" 
-                        Content="📝"
-                        Style="{DynamicResource HeaderButtonStyle}"
-                        Click="NoteWindows_Click"
-                        ToolTip="Manage note windows"
-                        WindowChrome.IsHitTestVisibleInChrome="True" />
+                <!-- 💾 Save status -->
+                <TextBlock x:Name="SaveStatus"
+                           Grid.Column="3"
+                           Text="Saved"
+                           FontSize="11"
+                           Foreground="#4CAF50"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0" />
 
-                <!-- ⚙️ Settings Button -->
-                <Button Grid.Column="3" 
-                        Content="⚙️"
-                        Style="{DynamicResource HeaderButtonStyle}"
-                        Click="Settings_Click"
-                        ToolTip="Settings"
-                        WindowChrome.IsHitTestVisibleInChrome="True" />
-
-                <!-- 🗑️ Delete Tab Button -->
-                <Button Grid.Column="4" 
-                        Content="🗑️"
-                        Style="{DynamicResource HeaderButtonStyle}"
-                        Click="DeleteTab_Click"
-                        ToolTip="Delete current tab"
-                        WindowChrome.IsHitTestVisibleInChrome="True" />
-
-                <!-- 🌙 Theme Toggle Button -->
-                <Button Grid.Column="5" 
-                        Content="🌙"
-                        Style="{DynamicResource HeaderButtonStyle}"
-                        Click="ToggleTheme_Click"
-                        ToolTip="Toggle theme"
-                        WindowChrome.IsHitTestVisibleInChrome="True" />
-
-                <!-- ℹ️ Help Button -->
-                <Button Grid.Column="6" 
-                        Content="?"
-                        Style="{DynamicResource HeaderButtonStyle}"
-                        Click="Help_Click"
-                        ToolTip="Features and shortcuts"
-                        WindowChrome.IsHitTestVisibleInChrome="True" />
-
-                <!-- 🔧 Developer Button -->
-                <Button Grid.Column="7" 
-                        Content="🔧"
-                        Style="{DynamicResource HeaderButtonStyle}"
-                        Click="Developer_Click"
-                        ToolTip="Developer tools (logs, diagnostics)"
-                        WindowChrome.IsHitTestVisibleInChrome="True" />
-
-                <!-- 📌 Pin Button (Always on Top) -->
-                <Button x:Name="PinButton"
-                        Grid.Column="8" 
-                        Content="📌"
-                        Style="{DynamicResource HeaderPinButtonStyle}"
-                        Click="Pin_Click"
-                        ToolTip="Always on top: Off"
-                        WindowChrome.IsHitTestVisibleInChrome="True" />
-
-                <!-- − Minimize Button -->
-                <Button Grid.Column="9" 
-                        Content="−"
-                        Style="{DynamicResource HeaderButtonStyle}"
-                        Click="Minimize_Click"
-                        ToolTip="Minimize"
-                        FontSize="20"
-                        FontWeight="Bold"
-                        WindowChrome.IsHitTestVisibleInChrome="True" />
-
-                <!-- ❌ Close Button -->
-                <Button Grid.Column="10" 
-                        Content="×"
-                        Style="{DynamicResource HeaderCloseButtonStyle}"
-                        Click="Close_Click"
-                        ToolTip="Close"
-                        FontSize="16"
-                        WindowChrome.IsHitTestVisibleInChrome="True" />
-                </Grid>
-            </Border>
-
-            <!-- 📑 Tab Strip — flat chrome, tabs float via contrast -->
-            <Border Grid.Row="1"
-                    Background="{DynamicResource AppBackgroundBrush}"
-                    BorderBrush="{DynamicResource SubtleDividerBrush}"
-                    BorderThickness="0,0,0,1"
-                    Padding="4,4,4,2">
-
-                <ScrollViewer Background="Transparent"
-                              MaxHeight="200"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
-
-                    <!-- 🏷️ Custom Tab Header Panel with Multi-Row Wrapping -->
-                    <WrapPanel x:Name="TabHeaderPanel"
-                               Orientation="Horizontal"
-                               Margin="4,2"
-                               Background="Transparent" />
-                </ScrollViewer>
-            </Border>
-
-            <!-- 📝 Main Content Area — solid zinc card with depth shadow -->
-            <Border Grid.Row="2"
-                    Background="{DynamicResource ContentCardBrush}"
-                    CornerRadius="6"
-                    Margin="4,0,4,2"
-                    BorderBrush="{DynamicResource SubtleDividerBrush}"
-                    BorderThickness="1,1,1,0">
-                <Border.Effect>
-                    <DropShadowEffect Color="#000000"
-                                      Direction="270"
-                                      ShadowDepth="2"
-                                      Opacity="0.2"
-                                      BlurRadius="6"/>
-                </Border.Effect>
-
-                <!-- 🔗 Tab Content Display -->
-                <ContentPresenter x:Name="TabContentArea"
-                                  VerticalAlignment="Stretch"
-                                  HorizontalAlignment="Stretch" />
-            </Border>
-
-            <!-- 📊 Modern Status Bar with Rounded Bottom Corners -->
-            <Border Grid.Row="3" 
-                    Background="{DynamicResource HeaderBackgroundBrush}"
-                    BorderBrush="{DynamicResource BorderBrush}"
-                    BorderThickness="0,1,0,0"
-                    CornerRadius="0,0,12,12">
-                
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />  <!-- Tab count -->
-                        <ColumnDefinition Width="*" />     <!-- Spacer -->
-                        <ColumnDefinition Width="Auto" />  <!-- Word count -->
-                        <ColumnDefinition Width="Auto" />  <!-- Save status -->
-                        <ColumnDefinition Width="Auto" />  <!-- Current time -->
-                    </Grid.ColumnDefinitions>
-
-                    <!-- 📑 Tab count -->
-                    <TextBlock x:Name="TabCountStatus" 
-                               Grid.Column="0"
-                               Text="1 tab"
-                               FontSize="11"
-                               Foreground="{DynamicResource AppForegroundBrush}"
-                               VerticalAlignment="Center"
-                               Margin="8,0,0,0" />
-
-                    <!-- 📝 Word count -->
-                    <TextBlock x:Name="WordCountStatus" 
-                               Grid.Column="2"
-                               Text="0 words"
-                               FontSize="11"
-                               Foreground="{DynamicResource AppForegroundBrush}"
-                               VerticalAlignment="Center"
-                               Margin="0,0,8,0" />
-
-                    <!-- 💾 Save status -->
-                    <TextBlock x:Name="SaveStatus" 
-                               Grid.Column="3"
-                               Text="Saved"
-                               FontSize="11"
-                               Foreground="#4CAF50"
-                               VerticalAlignment="Center"
-                               Margin="0,0,8,0" />
-
-                    <!-- 🕒 Current time -->
-                    <TextBlock x:Name="TimeStatus" 
-                               Grid.Column="4"
-                               Text="12:00 PM"
-                               FontSize="11"
-                               Foreground="{DynamicResource AppForegroundBrush}"
-                               VerticalAlignment="Center"
-                               Margin="0,0,8,0" />
-                </Grid>
-            </Border>
-
-        </Grid>
-    </Border>
-</Window>
+                <!-- 🕒 Current time -->
+                <TextBlock x:Name="TimeStatus"
+                           Grid.Column="4"
+                           Text="12:00 PM"
+                           FontSize="11"
+                           Foreground="{DynamicResource AppForegroundBrush}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0" />
+            </Grid>
+        </Border>
+    </Grid>
+</ui:FluentWindow>

@@ -8,32 +8,45 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Interop;
 using System.Windows.Threading;
+using WpfAnimatedGif;
+using SnipShottyBoard.Infrastructure.Logging;
 
 namespace SnipShottyBoard.UI
 {
     /// <summary>
-    /// 🖼️ Custom Image Viewer Window with toolbar functionality
-    ///
-    /// KEY FEATURES:
-    /// - Window automatically sizes to fit the image at original resolution (within screen limits)
-    /// - Image scales automatically when you resize the window
-    /// - Copy and delete functionality with keyboard shortcuts
-    /// - Clean, modern UI with status bar showing image details
-    /// - LRU cache integration for static images (keyed by path:full)
-    /// - GIFs load with full animation, skip cache
+    /// 🖼️ Custom Image Viewer Window with toolbar functionality, zoom/pan, and GIF controls
     /// </summary>
-    public partial class ImageViewerWindow : Window
+    public partial class ImageViewerWindow : Wpf.Ui.Controls.FluentWindow
     {
         private const string FullResCacheSuffix = ":full";
 
         private string currentImagePath;
         private BitmapImage currentImage;
-        private Action<string> onImageDeleted; // Callback when image is deleted
+        private Action<string> onImageDeleted;
 
         // 🖼️ Navigation support
         private List<string> allImagePaths;
         private int currentImageIndex;
+
+        // 🔍 Zoom & Pan state
+        private double currentZoomLevel = 1.0;
+        private const double MIN_ZOOM = 0.25;
+        private const double MAX_ZOOM = 5.0;
+        private bool _isInFitMode = true;   // true = image tracks window size on resize
+        private bool isGifPaused = false;
+        private Point _mouseDownPos;
+        private bool _isMouseDragging = false;
+        private double _panStartScrollH;
+        private double _panStartScrollV;
+
+        // 🐛 Debug image logging (Sprint D.1a)
+        private static bool debugImageLogging = true;
+        private int imageLoadSession = 0;
+
+        // 🛑 Cancel stale loads on rapid navigation
+        private CancellationTokenSource? _currentLoadCts;
 
         public ImageViewerWindow()
         {
@@ -61,45 +74,69 @@ namespace SnipShottyBoard.UI
             LoadImage(imagePath);
         }
 
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            var source = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
+            if (source?.CompositionTarget != null)
+            {
+                source.CompositionTarget.BackgroundColor = System.Windows.Media.Color.FromRgb(0x18, 0x18, 0x1B);
+            }
+        }
+
         // 🔧 Setup window properties and behavior
         private void SetupWindow()
         {
-            // 🎨 Apply theme-aware sizing
             this.MinWidth = SnipShottyBoard.Data.AppConstants.ImageViewerMinWidth;
             this.MinHeight = SnipShottyBoard.Data.AppConstants.ImageViewerMinHeight;
             
-            // 🔑 Handle keyboard shortcuts
             this.KeyDown += (s, e) =>
             {
                 switch (e.Key)
                 {
-                    case Key.Escape:
-                        this.Close();
-                        break;
-                    case Key.C when Keyboard.Modifiers == ModifierKeys.Control:
-                        CopyImageToClipboard();
-                        break;
-                    case Key.Delete:
-                        DeleteCurrentImage();
-                        break;
-                    case Key.Left:
-                        NavigateToPreviousImage();
-                        break;
-                    case Key.Right:
-                        NavigateToNextImage();
-                        break;
+                    case Key.Escape: this.Close(); break;
+                    case Key.C when Keyboard.Modifiers == ModifierKeys.Control: CopyImageToClipboard(); break;
+                    case Key.Delete: DeleteCurrentImage(); break;
+                    case Key.Left: NavigateToPreviousImage(); break;
+                    case Key.Right: NavigateToNextImage(); break;
                 }
             };
 
-            // 📏 Handle window resize to update scaling info
             this.SizeChanged += (s, e) =>
             {
                 UpdateImageInfo();
+                if (_isInFitMode && currentImage != null)
+                    Dispatcher.BeginInvoke(new Action(() => FitToWindow()), DispatcherPriority.Background);
             };
-
-            // 🎯 Set focus to allow keyboard shortcuts
+            // Re-focus the window every time it becomes active so arrow-key navigation
+            // always works even after clicking away and back.
+            this.Activated += (s, e) => this.Focus();
             this.Focusable = true;
             this.Focus();
+        }
+
+        private void LogImage(string message, Exception? ex = null)
+        {
+            if (!debugImageLogging) return;
+            var filename = Path.GetFileName(currentImagePath) ?? "unknown";
+            var threadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
+            var sessionTag = $"IMG-sess{imageLoadSession}-{filename}";
+
+            if (ex != null)
+                LoggingService.LogErrorStatic($"[{sessionTag}] Thread={threadId} — {message}", ex, "ImageLoad");
+            else
+                LoggingService.LogDebugStatic($"[{sessionTag}] Thread={threadId} — {message}", "ImageLoad");
+        }
+
+        private void ClearPreviousImage()
+        {
+            if (string.IsNullOrEmpty(currentImagePath)) return;
+            try { ImageBehavior.SetAnimatedSource(DisplayImage, null); } catch { /* no prior GIF */ }
+            DisplayImage.Source = null;
+            currentImage = null;
+            ImageCacheManager.Instance.RemoveAllForPath(currentImagePath);
+            currentZoomLevel = 1.0;
+            _isInFitMode = false;
         }
 
         // 🖼️ Load and display an image (supports animated GIFs)
@@ -107,14 +144,25 @@ namespace SnipShottyBoard.UI
         {
             try
             {
+                _currentLoadCts?.Cancel();
+                _currentLoadCts?.Dispose();
+                _currentLoadCts = null;
+
+                ClearPreviousImage();
+
+                imageLoadSession++;
+                currentImagePath = imagePath;
+                isGifPaused = false;
+                LogImage("📥 LoadImage START");
+
                 if (!File.Exists(imagePath))
                 {
                     ShowError("Image file not found.");
                     return;
                 }
 
-                currentImagePath = imagePath;
                 var extension = Path.GetExtension(imagePath).ToLowerInvariant();
+                LogImage($"Format detected: {extension}");
 
                 if (extension == ".gif")
                     LoadGifAsync(imagePath);
@@ -123,29 +171,29 @@ namespace SnipShottyBoard.UI
             }
             catch (Exception ex)
             {
+                LogImage("💥 Exception in LoadImage", ex);
                 ShowError($"Failed to load image: {ex.Message}");
             }
         }
 
-        /// <summary>
-        /// Load a static image asynchronously on a background thread, then apply on UI thread.
-        /// Checks the LRU cache first; caches on hit/miss using key "path:full".
-        /// </summary>
         private async void LoadStaticAsync(string imagePath)
         {
             var cacheKey = imagePath + FullResCacheSuffix;
-
-            // Check cache on UI thread
             BitmapImage? cached = ImageCacheManager.Instance.GetFromCache(cacheKey);
             if (cached != null)
             {
-                ApplyImage(cached, imagePath);
+                LogImage("⚡ Cache HIT for static image");
+                ApplyStaticImage(cached, imagePath);
                 return;
             }
 
-            // Decode on background thread
+            LogImage("🔄 Cache MISS, decoding on background thread");
+            _currentLoadCts = new CancellationTokenSource();
+            var cts = _currentLoadCts;
+
             var bitmap = await Task.Run(() =>
             {
+                if (cts.IsCancellationRequested) return null;
                 var bmp = new BitmapImage();
                 bmp.BeginInit();
                 bmp.CacheOption = BitmapCacheOption.OnLoad;
@@ -155,64 +203,70 @@ namespace SnipShottyBoard.UI
                 return bmp;
             });
 
-            // Cache and apply on UI thread
+            if (cts.IsCancellationRequested || bitmap == null)
+            {
+                LogImage("⚠️ Load cancelled — navigation moved on");
+                cts.Dispose();
+                _currentLoadCts = null;
+                return;
+            }
+
             Dispatcher.Invoke(() =>
             {
-                ImageCacheManager.Instance.AddToCache(cacheKey, bitmap);
-                ApplyImage(bitmap, imagePath);
+                if (currentImagePath == imagePath)
+                {
+                    ImageCacheManager.Instance.AddToCache(cacheKey, bitmap);
+                    ApplyStaticImage(bitmap, imagePath);
+                }
             });
         }
 
-        /// <summary>
-        /// Load a GIF with full animation support.
-        /// GIFs skip the cache since their BitmapImages can't be frozen.
-        /// Falls back to static loading if animation fails.
-        /// </summary>
-        private async void LoadGifAsync(string imagePath)
+        private void LoadGifAsync(string imagePath)
         {
+            LogImage("🎞️ Creating GIF BitmapImage (OnDemand cache)");
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnDemand;
+            bitmap.CreateOptions = BitmapCreateOptions.None;
+            bitmap.UriSource = new Uri(imagePath, UriKind.Absolute);
+            bitmap.EndInit();
+
+            currentImagePath = imagePath;
+            LogImage($"BitmapImage created, size={bitmap.PixelWidth}x{bitmap.PixelHeight}");
+
+            RenderOptions.SetBitmapScalingMode(DisplayImage, BitmapScalingMode.Unspecified);
+            DisplayImage.SnapsToDevicePixels = false;
+            DisplayImage.UseLayoutRounding = false;
+
+            try { ImageBehavior.SetAnimatedSource(DisplayImage, null); } catch { /* safe */ }
             try
             {
-                var bitmap = await Task.Run(() =>
-                {
-                    var bmp = new BitmapImage();
-                    bmp.BeginInit();
-                    bmp.CacheOption = BitmapCacheOption.OnDemand;
-                    bmp.CreateOptions = BitmapCreateOptions.None;
-                    bmp.UriSource = new Uri(imagePath, UriKind.Absolute);
-                    bmp.EndInit();
-                    return bmp;
-                });
-
-                Dispatcher.Invoke(() =>
-                {
-                    RenderOptions.SetBitmapScalingMode(DisplayImage, BitmapScalingMode.Unspecified);
-                    DisplayImage.SnapsToDevicePixels = false;
-                    DisplayImage.UseLayoutRounding = false;
-
-                    ApplyImage(bitmap, imagePath);
-                });
+                ImageBehavior.SetAnimatedSource(DisplayImage, bitmap);
+                LogImage("✅ SetAnimatedSource complete");
             }
-            catch
+            catch (Exception ex)
             {
-                // Fallback: load GIF as a static first-frame image
-                LoadStaticAsync(imagePath);
+                LogImage("💥 SetAnimatedSource failed", ex);
+                throw;
             }
-        }
 
-        /// <summary>
-        /// Assign the bitmap to the UI and update window state.
-        /// Must be called on the UI thread.
-        /// </summary>
-        private void ApplyImage(BitmapImage bitmap, string imagePath)
-        {
             currentImage = bitmap;
-            DisplayImage.Source = bitmap;
-
             var fileName = Path.GetFileName(imagePath);
             this.Title = $"🖼️ {fileName}";
 
-            UpdateImageInfo();
             AutoSizeWindow(bitmap);
+            Dispatcher.BeginInvoke(new Action(() => ApplyOneToOne()), DispatcherPriority.Loaded);
+        }
+
+        private void ApplyStaticImage(BitmapImage bitmap, string imagePath)
+        {
+            currentImage = bitmap;
+            DisplayImage.Source = bitmap;
+            var fileName = Path.GetFileName(imagePath);
+            this.Title = $"🖼️ {fileName}";
+
+            AutoSizeWindow(bitmap);
+            Dispatcher.BeginInvoke(new Action(() => ApplyOneToOne()), DispatcherPriority.Loaded);
         }
 
         // 📐 Set window size to show image at original resolution (within screen limits)
@@ -220,33 +274,135 @@ namespace SnipShottyBoard.UI
         {
             try
             {
-                // 📺 Get screen dimensions (leave some margin)
-                var screenWidth = SystemParameters.WorkArea.Width * SnipShottyBoard.Data.AppConstants.ScreenUsageRatio; // 90% of screen width
-                var screenHeight = SystemParameters.WorkArea.Height * SnipShottyBoard.Data.AppConstants.ScreenUsageRatio; // 90% of screen height
+                var screenWidth = SystemParameters.WorkArea.Width * SnipShottyBoard.Data.AppConstants.ScreenUsageRatio;
+                var screenHeight = SystemParameters.WorkArea.Height * SnipShottyBoard.Data.AppConstants.ScreenUsageRatio;
 
-                // 🎯 Calculate window chrome overhead
-                var chromeHeight = SnipShottyBoard.Data.AppConstants.WindowChromeHeight; // Title bar + toolbar + status bar
-                var chromeWidth = SnipShottyBoard.Data.AppConstants.WindowChromeWidth; // Side margins
+                var chromeHeight = SnipShottyBoard.Data.AppConstants.WindowChromeHeight;
+                var chromeWidth = SnipShottyBoard.Data.AppConstants.WindowChromeWidth;
 
-                // 📏 Calculate desired window size based on original image size
                 var desiredWindowWidth = bitmap.PixelWidth + chromeWidth;
                 var desiredWindowHeight = bitmap.PixelHeight + chromeHeight;
 
-                // 🔄 Set window size (prioritize showing original image size)
                 this.Width = Math.Max(this.MinWidth, Math.Min(desiredWindowWidth, screenWidth));
                 this.Height = Math.Max(this.MinHeight, Math.Min(desiredWindowHeight, screenHeight));
 
-                // 🎯 Center window on screen
                 this.Left = (SystemParameters.WorkArea.Width - this.Width) / 2;
                 this.Top = (SystemParameters.WorkArea.Height - this.Height) / 2;
             }
             catch
             {
-                // 🛡️ Fallback to reasonable default size if calculation fails
                 this.Width = SnipShottyBoard.Data.AppConstants.DefaultImageViewerWidth;
                 this.Height = SnipShottyBoard.Data.AppConstants.DefaultImageViewerHeight;
                 this.WindowStartupLocation = WindowStartupLocation.CenterOwner;
             }
+        }
+
+        // 🔍 Show image at 1:1 (actual pixels) — default view when opening or navigating
+        private void ApplyOneToOne()
+        {
+            currentZoomLevel = 1.0;
+            _isInFitMode = false;
+            ApplyCurrentZoom();
+            UpdateImageInfo();
+        }
+
+        // 🔍 Fit image to current window client area (used when _isInFitMode == true on resize)
+        private void FitToWindow()
+        {
+            if (currentImage == null) return;
+
+            double availWidth = ImageScrollViewer.ViewportWidth - 20;
+            double availHeight = ImageScrollViewer.ViewportHeight - 20;
+
+            if (availWidth <= 0 || availHeight <= 0) return;
+
+            double scaleX = availWidth / currentImage.PixelWidth;
+            double scaleY = availHeight / currentImage.PixelHeight;
+
+            currentZoomLevel = Math.Min(scaleX, scaleY);
+            currentZoomLevel = Math.Max(MIN_ZOOM, Math.Min(MAX_ZOOM, currentZoomLevel));
+            _isInFitMode = true;
+
+            ApplyCurrentZoom();
+        }
+
+        // 🔍 Apply the current zoom level to the image dimensions
+        private void ApplyCurrentZoom()
+        {
+            if (currentImage == null) return;
+            ApplyCurrentZoom(center: true);
+        }
+
+        private void ApplyCurrentZoom(bool center)
+        {
+            if (currentImage == null) return;
+
+            DisplayImage.Width = currentImage.PixelWidth * currentZoomLevel;
+            DisplayImage.Height = currentImage.PixelHeight * currentZoomLevel;
+
+            if (center)
+            {
+                Dispatcher.BeginInvoke(new Action(() => {
+                    if (DisplayImage.ActualWidth > 0)
+                    {
+                        ImageScrollViewer.ScrollToHorizontalOffset(ImageScrollViewer.ScrollableWidth / 2);
+                        ImageScrollViewer.ScrollToVerticalOffset(ImageScrollViewer.ScrollableHeight / 2);
+                    }
+                }), DispatcherPriority.Render);
+            }
+
+            UpdateStatusZoom();
+        }
+
+        // 🔍 Zoom at a specific mouse position — keeps the point under cursor pinned
+        private void ApplyZoomAtPoint(Point mouseViewportPos)
+        {
+            if (currentImage == null) return;
+
+            double oldWidth = DisplayImage.ActualWidth;
+            double oldHeight = DisplayImage.ActualHeight;
+
+            if (oldWidth <= 0 || oldHeight <= 0)
+            {
+                ApplyCurrentZoom(center: true);
+                return;
+            }
+
+            // Fractional anchor point in the image under the mouse (zoom-invariant)
+            Point mousePosInImage = Mouse.GetPosition(DisplayImage);
+            double fracX = Math.Clamp(mousePosInImage.X / oldWidth, 0.0, 1.0);
+            double fracY = Math.Clamp(mousePosInImage.Y / oldHeight, 0.0, 1.0);
+
+            double newWidth = currentImage.PixelWidth * currentZoomLevel;
+            double newHeight = currentImage.PixelHeight * currentZoomLevel;
+
+            DisplayImage.Width = newWidth;
+            DisplayImage.Height = newHeight;
+
+            // Snapshot scroll offsets before dispatch (used to resolve image origin in viewport)
+            double snapOffsetX = ImageScrollViewer.HorizontalOffset;
+            double snapOffsetY = ImageScrollViewer.VerticalOffset;
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (DisplayImage.ActualWidth <= 0) return;
+
+                // Image origin in viewport space — gives us (padding - scrollOffset)
+                // which is scroll-position-independent for computing content coords
+                Point imageTopLeft = DisplayImage.TransformToAncestor(ImageScrollViewer).Transform(new Point(0, 0));
+
+                // New scroll: keeps (fracX*newWidth, fracY*newHeight) under the mouse
+                double newOffsetX = snapOffsetX + imageTopLeft.X + fracX * newWidth - mouseViewportPos.X;
+                double newOffsetY = snapOffsetY + imageTopLeft.Y + fracY * newHeight - mouseViewportPos.Y;
+
+                newOffsetX = Math.Max(0, Math.Min(ImageScrollViewer.ScrollableWidth, newOffsetX));
+                newOffsetY = Math.Max(0, Math.Min(ImageScrollViewer.ScrollableHeight, newOffsetY));
+
+                ImageScrollViewer.ScrollToHorizontalOffset(newOffsetX);
+                ImageScrollViewer.ScrollToVerticalOffset(newOffsetY);
+            }), DispatcherPriority.Render);
+
+            UpdateStatusZoom();
         }
 
         // 📋 Copy image to clipboard
@@ -256,16 +412,11 @@ namespace SnipShottyBoard.UI
             {
                 if (currentImage != null)
                 {
-                    // Copy the image data to clipboard for pasting
                     Clipboard.SetImage(currentImage);
-                    
-                    // 🎉 Show feedback
                     ShowTemporaryMessage("📋 Image copied to clipboard!");
                 }
                 else
-                {
                     ShowError("No image to copy.");
-                }
             }
             catch (Exception ex)
             {
@@ -273,16 +424,12 @@ namespace SnipShottyBoard.UI
             }
         }
 
-        // 📣 Show temporary success message (lightweight - no timer needed)
         private void ShowTemporaryMessage(string message)
         {
             StatusFileName.Text = message;
             StatusFileName.Foreground = new SolidColorBrush(Colors.Green);
-            
-            // Note: Removed timer - message will be cleared when window closes or image updates
         }
 
-        // ❌ Show error message
         private void ShowError(string message)
         {
             StatusFileName.Text = $"❌ {message}";
@@ -296,7 +443,6 @@ namespace SnipShottyBoard.UI
         private void NavigateToPreviousImage()
         {
             if (allImagePaths == null || allImagePaths.Count <= 1) return;
-
             currentImageIndex = (currentImageIndex - 1 + allImagePaths.Count) % allImagePaths.Count;
             LoadImage(allImagePaths[currentImageIndex]);
         }
@@ -305,7 +451,6 @@ namespace SnipShottyBoard.UI
         private void NavigateToNextImage()
         {
             if (allImagePaths == null || allImagePaths.Count <= 1) return;
-
             currentImageIndex = (currentImageIndex + 1) % allImagePaths.Count;
             LoadImage(allImagePaths[currentImageIndex]);
         }
@@ -320,12 +465,9 @@ namespace SnipShottyBoard.UI
                     var fileInfo = new FileInfo(currentImagePath);
                     var fileSizeKB = Math.Round(fileInfo.Length / SnipShottyBoard.Data.AppConstants.BytesToKB, 1);
                     
-                    // 📂 File name and path
-                    var fileName = Path.GetFileName(currentImagePath);
-                    StatusFileName.Text = fileName;
+                    StatusFileName.Text = Path.GetFileName(currentImagePath);
                     StatusFileName.Foreground = (System.Windows.Media.Brush)FindResource("AppForegroundBrush");
                     
-                    // 📐 Image dimensions (with display size if different)
                     var displayWidth = (int)DisplayImage.ActualWidth;
                     var displayHeight = (int)DisplayImage.ActualHeight;
                     
@@ -339,64 +481,150 @@ namespace SnipShottyBoard.UI
                         StatusDimensions.Text = $"{currentImage.PixelWidth} × {currentImage.PixelHeight} px";
                     }
                     
-                    // 💾 File size
                     StatusFileSize.Text = $"{fileSizeKB} KB";
-                    
-                    // 🕒 File creation/modification date
                     var fileDate = fileInfo.LastWriteTime;
                     StatusDateTime.Text = fileDate.ToString("M/d/yyyy h:mm tt");
+
+                    UpdateStatusZoom();
                 }
                 else
                 {
-                    // 🚫 No image loaded
                     StatusFileName.Text = "No image loaded";
                     StatusDimensions.Text = "-- × -- px";
                     StatusFileSize.Text = "-- KB";
                     StatusDateTime.Text = "--";
+                    StatusZoom.Text = "Fit";
                 }
             }
-            catch
+            catch { /* ignore */ }
+        }
+
+        private void UpdateStatusZoom()
+        {
+            if (_isInFitMode)
+                StatusZoom.Text = $"Fit ({(currentZoomLevel * 100):F0}%)";
+            else if (Math.Abs(currentZoomLevel - 1.0) < 0.01)
+                StatusZoom.Text = "100% (1:1)";
+            else
+                StatusZoom.Text = $"{(currentZoomLevel * 100):F0}%";
+        }
+
+        #region UI Event Handlers
+
+        private void CopyButton_Click(object sender, RoutedEventArgs e) => CopyImageToClipboard();
+        private void DeleteButton_Click(object sender, RoutedEventArgs e) => DeleteCurrentImage();
+
+        private void PrevButton_Click(object sender, RoutedEventArgs e) => NavigateToPreviousImage();
+        private void NextButton_Click(object sender, RoutedEventArgs e) => NavigateToNextImage();
+
+        private void FitActualButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (currentImage == null) return;
+            AutoSizeWindow(currentImage);   // resize window back to original dimensions
+            _isInFitMode = false;
+            currentZoomLevel = 1.0;
+            // Defer so the window layout finishes before we center the scroll
+            Dispatcher.BeginInvoke(new Action(() => ApplyCurrentZoom()), DispatcherPriority.Loaded);
+        }
+
+        // 🔍 Mouse Wheel Zoom — zooms around cursor position, keeping point under mouse pinned
+        private void ImageScrollViewer_MouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (currentImage == null) return;
+            e.Handled = true;
+            _isInFitMode = false;
+
+            double factor = e.Delta > 0 ? 1.15 : 1.0 / 1.15;
+            currentZoomLevel = Math.Max(MIN_ZOOM, Math.Min(MAX_ZOOM, currentZoomLevel * factor));
+
+            var mousePos = Mouse.GetPosition(ImageScrollViewer);
+            ApplyZoomAtPoint(mousePos);
+        }
+
+        // ⏸️ GIF Click Toggle, Double-Click Zoom, and Mouse-Drag Pan
+        private void DisplayImage_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            // WPF Image doesn't expose MouseDoubleClick in XAML — detect via ClickCount
+            if (e.ClickCount > 1)
             {
-                // 🛡️ Ignore errors during info updates
-                StatusFileName.Text = "Error loading info";
-                StatusDimensions.Text = "Error";
-                StatusFileSize.Text = "Error";
-                StatusDateTime.Text = "Error";
+                _isInFitMode = false;
+                currentZoomLevel = 1.0;
+                ApplyCurrentZoom();
+                e.Handled = true;
+                return;
+            }
+
+            // Record pan start position relative to the ScrollViewer viewport (stable reference frame)
+            _mouseDownPos = Mouse.GetPosition(ImageScrollViewer);
+            _panStartScrollH = ImageScrollViewer.HorizontalOffset;
+            _panStartScrollV = ImageScrollViewer.VerticalOffset;
+            _isMouseDragging = false;
+            (sender as UIElement)?.CaptureMouse();
+        }
+
+        private void DisplayImage_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (e.LeftButton != MouseButtonState.Pressed || !((sender as UIElement)?.IsMouseCaptured ?? false)) return;
+
+            var currentPos = Mouse.GetPosition(ImageScrollViewer);
+            double deltaX = _mouseDownPos.X - currentPos.X;
+            double deltaY = _mouseDownPos.Y - currentPos.Y;
+
+            if (Math.Abs(deltaX) > 3 || Math.Abs(deltaY) > 3)
+                _isMouseDragging = true;
+
+            ImageScrollViewer.ScrollToHorizontalOffset(_panStartScrollH + deltaX);
+            ImageScrollViewer.ScrollToVerticalOffset(_panStartScrollV + deltaY);
+        }
+
+        private void DisplayImage_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            bool wasDragging = _isMouseDragging;
+            _isMouseDragging = false;
+            (sender as UIElement)?.ReleaseMouseCapture();
+
+            // Skip single-click logic for double-click sequence or if the user dragged
+            if (e.ClickCount > 1 || wasDragging) return;
+
+            var currentPos = Mouse.GetPosition(ImageScrollViewer);
+            double dist = Math.Sqrt(Math.Pow(currentPos.X - _mouseDownPos.X, 2) + Math.Pow(currentPos.Y - _mouseDownPos.Y, 2));
+
+            // If moved < 5px from press point, treat as a click → toggle GIF pause
+            if (dist < 5.0 && currentImagePath != null && Path.GetExtension(currentImagePath).ToLowerInvariant() == ".gif")
+            {
+                isGifPaused = !isGifPaused;
+                try
+                {
+                    var controller = ImageBehavior.GetAnimationController(DisplayImage);
+                    if (isGifPaused)
+                        controller?.Pause();
+                    else
+                        controller?.Play();
+                }
+                catch { /* ignore */ }
+
+                var prevZoomText = StatusZoom.Text;
+                StatusZoom.Text = isGifPaused ? "⏸️ GIF Paused" : "▶️ Playing";
+                DispatcherTimer timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
+                timer.Tick += (s, args) => {
+                    timer.Stop();
+                    StatusZoom.Text = prevZoomText;
+                    UpdateStatusZoom();
+                };
+                timer.Start();
             }
         }
 
-        #region Event Handlers
-
-        // 📋 Copy button clicked
-        private void CopyButton_Click(object sender, RoutedEventArgs e)
+        private void DisplayImage_LostMouseCapture(object sender, MouseEventArgs e)
         {
-            CopyImageToClipboard();
+            // System stole capture (dialog, Alt-Tab, etc.) — reset drag state so nothing stays locked
+            _isMouseDragging = false;
         }
 
-        // 🗑️ Delete button clicked
-        private void DeleteButton_Click(object sender, RoutedEventArgs e)
-        {
-            DeleteCurrentImage();
-        }
+        #endregion
 
+        #region Internal Logic
 
-
-        // 🖱️ Handle title bar dragging for custom window chrome
-        private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
-        {
-            if (e.ChangedButton == MouseButton.Left)
-            {
-                this.DragMove();
-            }
-        }
-
-        // ✕ Handle close button click
-        private void CloseButton_Click(object sender, RoutedEventArgs e)
-        {
-            this.Close();
-        }
-
-        // 🗑️ Delete current image instantly (UI-first approach)
         private void DeleteCurrentImage()
         {
             try
@@ -404,62 +632,49 @@ namespace SnipShottyBoard.UI
                 if (!string.IsNullOrEmpty(currentImagePath))
                 {
                     var pathToDelete = currentImagePath;
-
-                    // 🧹 Remove from LRU cache (both thumbnail and full-res variants)
                     ImageCacheManager.Instance.RemoveAllForPath(pathToDelete);
-
-                    if (onImageDeleted != null)
-                        onImageDeleted.Invoke(pathToDelete);
-
+                    if (onImageDeleted != null) onImageDeleted.Invoke(pathToDelete);
                     Close();
 
-                    // 🗑️ Delete file asynchronously (non-blocking)
                     Task.Run(() =>
                     {
                         try
                         {
-                            if (File.Exists(pathToDelete))
-                                File.Delete(pathToDelete);
+                            if (File.Exists(pathToDelete)) File.Delete(pathToDelete);
                         }
-                        catch
-                        {
-                            // File may already be removed — ignore
-                        }
+                        catch { /* ignore */ }
                     });
                 }
-                else
-                {
-                    Close();
-                }
+                else Close();
             }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"❌ Delete failed: {ex.Message}");
-                Close();
-            }
+            catch { Close(); }
         }
-        
-        // 🔓 Quick resource cleanup for window closing
+
         private void ReleaseImageResources()
         {
             try
             {
-                // Quick cleanup - no blocking operations
-                if (DisplayImage != null)
-                {
-                    DisplayImage.Source = null;
-                }
+                long memBefore = GC.GetTotalMemory(false);
                 
+                try { ImageBehavior.SetAnimatedSource(DisplayImage, null); } catch { /* safe */ }
+                
+                if (currentImage != null && !currentImage.IsFrozen)
+                {
+                    try { currentImage.StreamSource?.Dispose(); } catch { /* safe */ }
+                }
+
+                if (DisplayImage != null) DisplayImage.Source = null;
                 currentImage = null;
                 currentImagePath = null;
+                
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"⚠️ Error during resource cleanup: {ex.Message}");
+                LoggingService.LogErrorStatic($"[CLS] Error during resource cleanup: {ex.Message}", ex, "ImageLoad");
             }
         }
-
-
 
         #endregion
 
@@ -467,12 +682,14 @@ namespace SnipShottyBoard.UI
 
         protected override void OnClosed(EventArgs e)
         {
-            // 🧹 Clean up resources using unified method
+            _currentLoadCts?.Cancel();
+            _currentLoadCts?.Dispose();
+            _currentLoadCts = null;
+
             ReleaseImageResources();
-            
             base.OnClosed(e);
         }
 
         #endregion
     }
-} 
+}

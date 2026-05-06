@@ -93,11 +93,18 @@ namespace SnipShottyBoard.Core.Managers
         {
             try
             {
+                // Match the serialization options used by AtomicSave
+                var jsonOptions = new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    PropertyNameCaseInsensitive = true
+                };
+
                 // 1. Try to load primary file
                 if (File.Exists(filePath) && VerifyJsonFile<T>(filePath))
                 {
                     var json = File.ReadAllText(filePath);
-                    var result = JsonSerializer.Deserialize<T>(json);
+                    var result = JsonSerializer.Deserialize<T>(json, jsonOptions);
                     if (result != null)
                     {
                         LoggingService.LogDebugStatic($"Loaded {PathSanitizer.SanitizePath(filePath)} successfully", "Data");
@@ -112,7 +119,7 @@ namespace SnipShottyBoard.Core.Managers
                 if (File.Exists(backupPath) && VerifyJsonFile<T>(backupPath))
                 {
                     var json = File.ReadAllText(backupPath);
-                    var result = JsonSerializer.Deserialize<T>(json);
+                    var result = JsonSerializer.Deserialize<T>(json, jsonOptions);
                     if (result != null)
                     {
                         LoggingService.LogInfoStatic($"Recovered from backup: {PathSanitizer.SanitizePath(backupPath)}", "Data");
@@ -156,8 +163,13 @@ namespace SnipShottyBoard.Core.Managers
                 
                 var json = File.ReadAllText(filePath);
                 if (string.IsNullOrWhiteSpace(json)) return false;
-                
-                JsonSerializer.Deserialize<T>(json);
+
+                var jsonOptions = new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    PropertyNameCaseInsensitive = true
+                };
+                JsonSerializer.Deserialize<T>(json, jsonOptions);
                 return true;
             }
             catch
@@ -240,7 +252,12 @@ namespace SnipShottyBoard.Core.Managers
                     if (VerifyJsonFile<T>(backupFile))
                     {
                         var json = File.ReadAllText(backupFile);
-                        var result = JsonSerializer.Deserialize<T>(json);
+                        var jsonOptions = new JsonSerializerOptions
+                        {
+                            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                            PropertyNameCaseInsensitive = true
+                        };
+                        var result = JsonSerializer.Deserialize<T>(json, jsonOptions);
                         if (result != null)
                         {
                             LoggingService.LogInfoStatic($"Recovered from rolling backup: {Path.GetFileName(backupFile)}", "Data");

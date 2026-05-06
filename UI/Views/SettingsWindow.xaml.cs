@@ -6,7 +6,7 @@ using SnipShottyBoard.Data;
 
 namespace SnipShottyBoard.UI.Views
 {
-    public partial class SettingsWindow : Window
+    public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         #region Events
         // 🔄 Events for communicating with SettingsManager
@@ -58,7 +58,6 @@ namespace SnipShottyBoard.UI.Views
                 SetSelectedComboBoxItem(SaveIntervalComboBox, workingSettings.AutoSaveIntervalSeconds.ToString());
                 
                 // 🎨 Appearance Settings
-                SetSelectedComboBoxItem(ThemeComboBox, workingSettings.Theme);
                 SetSelectedComboBoxItem(FontSizeComboBox, workingSettings.FontSize.ToString());
                 
                 // 💻 Window Settings
@@ -262,25 +261,7 @@ namespace SnipShottyBoard.UI.Views
             }
         }
 
-        // 🎨 Appearance Settings Changed
-        private void Theme_Changed(object sender, SelectionChangedEventArgs e)
-        {
-            if (isInitializing) return;
-            
-            try
-            {
-                if (ThemeComboBox.SelectedItem is ComboBoxItem selected)
-                {
-                    workingSettings.Theme = selected.Tag.ToString();
-                    OnLogDebug?.Invoke($"⚙️ Theme changed: {workingSettings.Theme}");
-                }
-            }
-            catch (Exception ex)
-            {
-                OnLogError?.Invoke("❌ Error changing theme", ex);
-            }
-        }
-
+        // 🔤 Font Settings Changed
         private void FontSize_Changed(object sender, SelectionChangedEventArgs e)
         {
             if (isInitializing) return;
@@ -417,17 +398,6 @@ namespace SnipShottyBoard.UI.Views
             }
         }
 
-        private void Close_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                this.Close();
-            }
-            catch (Exception ex)
-            {
-                OnLogError?.Invoke("❌ Error closing settings window", ex);
-            }
-        }
         #endregion
 
         #region Helper Methods
@@ -443,7 +413,6 @@ namespace SnipShottyBoard.UI.Views
                     AutoSaveIntervalSeconds = original.AutoSaveIntervalSeconds,
                     
                     // 🎨 Appearance Settings
-                    Theme = original.Theme,
                     FontSize = original.FontSize,
                     
                     // 💻 Window Settings

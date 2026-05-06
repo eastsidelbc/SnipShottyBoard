@@ -620,6 +620,19 @@ namespace SnipShottyBoard.UI
                     }
                 }), System.Windows.Threading.DispatcherPriority.Loaded);
 
+                // 🎯 Auto-focus the text editor so user can start typing immediately
+                noteTab.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        noteTab.FocusEditor();
+                    }
+                    catch (Exception ex)
+                    {
+                        OnLogError?.Invoke("Error focusing editor on new tab", ex);
+                    }
+                }), System.Windows.Threading.DispatcherPriority.Loaded);
+
                 // 📍 Add to collections
                 tabs.Add(customTab);
                 tabHeaderPanel.Children.Add(customTab.HeaderButton);
@@ -787,28 +800,19 @@ namespace SnipShottyBoard.UI
                 VerticalContentAlignment = VerticalAlignment.Center
             };
 
-            // 🎨 Create completely seamless, invisible textbox styling
+            // 🎨 Create seamless textbox with accent caret for visibility
             try
             {
-                // Make background completely transparent to blend with tab
                 editBox.Background = Brushes.Transparent;
                 editBox.SetResourceReference(TextBox.ForegroundProperty, "AppForegroundBrush");
-                
-                // 🌟 Remove all visual boundaries for seamless appearance
-                editBox.BorderThickness = new Thickness(0); // No border at all
+                editBox.BorderThickness = new Thickness(0);
                 editBox.BorderBrush = Brushes.Transparent;
-                
-                // 🎯 Advanced styling for modern inline editing experience
-                editBox.CaretBrush = null; // Use system default caret
-                editBox.SelectionBrush = null; // Use system default selection
-                
-                // Remove default textbox styling  
-                editBox.Padding = new Thickness(0); // No internal padding
-                editBox.Margin = textBlock.Margin; // Match original margin exactly
+                editBox.CaretBrush = (Brush)Application.Current.FindResource("AccentBrush");
+                editBox.Padding = new Thickness(0);
+                editBox.Margin = textBlock.Margin;
             }
             catch
             {
-                // Fallback - still make it as seamless as possible
                 editBox.Background = Brushes.Transparent;
                 editBox.Foreground = textBlock.Foreground ?? new SolidColorBrush(Color.FromRgb(255, 255, 255));
                 editBox.BorderThickness = new Thickness(0);
@@ -822,33 +826,39 @@ namespace SnipShottyBoard.UI
 
             // 🎯 Store original tab appearance for restoration
             var originalBackground = tabButton.Background;
-            var originalBorderThickness = tabButton.BorderThickness;
-            var originalBorderBrush = tabButton.BorderBrush;
+            var originalEffect = tabButton.Effect;
 
-            // 🌟 Apply clear "EDITING MODE" visual indicators to the tab itself
+            // 🌟 Apply "EDITING MODE" indicators using template elements + design tokens
+            // TabBorder gets accent-tinted bg + accent border; ActiveUnderline shows; glow effect
+            Border? tabBorder = tabButton.Template?.FindName("TabBorder", tabButton) as Border;
+            Border? activeUnderline = tabButton.Template?.FindName("ActiveUnderline", tabButton) as Border;
+            var originalTabBorderBg = tabBorder?.Background;
+            var originalUnderlineOpacity = activeUnderline?.Opacity;
+
             try
             {
-                // Make the entire tab clearly show it's in edit mode
-                tabButton.SetResourceReference(Button.BackgroundProperty, "TabBackgroundBrush");
-                
-                // Add a distinctive border to show editing state
-                tabButton.BorderThickness = new Thickness(2);
-                tabButton.BorderBrush = new SolidColorBrush(Color.FromRgb(74, 144, 226)); // Nice blue
-                
-                // Add subtle glow effect by using a slightly different background
-                var editBg = new SolidColorBrush(Color.FromArgb(40, 74, 144, 226)); // Subtle blue tint
-                tabButton.Background = editBg;
-                
-                // Keep textbox transparent so tab styling shows through
-                editBox.Background = Brushes.Transparent;
+                var accentBrush = (Brush)Application.Current.FindResource("AccentBrush");
+                var glowEffect = Application.Current.FindResource("AccentGlowEffect") as System.Windows.Media.Effects.Effect;
+
+                // Accent-tinted background on tab surface
+                tabBorder!.Background = new SolidColorBrush(Color.FromArgb(30, 99, 102, 241)); // 12% indigo
+                tabBorder.BorderBrush = accentBrush;
+                tabBorder.BorderThickness = new Thickness(1.5);
+
+                // Show accent gradient underline
+                activeUnderline!.Opacity = 1;
+
+                // Apply glow effect
+                if (glowEffect != null)
+                    tabButton.Effect = glowEffect;
             }
             catch
             {
-                // Fallback - at least make it visually different
-                tabButton.Background = new SolidColorBrush(Color.FromArgb(60, 100, 150, 255));
-                tabButton.BorderThickness = new Thickness(1);
-                tabButton.BorderBrush = new SolidColorBrush(Color.FromRgb(100, 150, 255));
-                editBox.Background = Brushes.Transparent;
+                // Fallback — accent border on button level
+                tabBorder!.Background = new SolidColorBrush(Color.FromArgb(40, 99, 102, 241));
+                tabBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(99, 102, 241));
+                tabBorder.BorderThickness = new Thickness(1.5);
+                activeUnderline!.Opacity = 1;
             }
 
             bool isEditing = true;
@@ -889,14 +899,15 @@ namespace SnipShottyBoard.UI
 
             void RestoreTabAppearance()
             {
-                // 🔄 Restore the tab to its normal appearance
+                // 🔄 Restore tab surface + underline + effect to pre-edit state
                 try
                 {
-                    tabButton.Background = originalBackground;
-                    tabButton.BorderThickness = originalBorderThickness;
-                    tabButton.BorderBrush = originalBorderBrush;
-                    
-                    // Force refresh of tab selection state to ensure proper styling
+                    tabBorder!.Background = originalTabBorderBg;
+                    tabBorder.BorderThickness = new Thickness(0);
+                    activeUnderline!.Opacity = originalUnderlineOpacity ?? 0;
+                    tabButton.Effect = originalEffect;
+
+                    // Force refresh of tab selection state
                     var currentTab = tabs.FirstOrDefault(t => t.HeaderButton == tabButton);
                     if (currentTab != null)
                     {
@@ -905,10 +916,9 @@ namespace SnipShottyBoard.UI
                 }
                 catch
                 {
-                    // Fallback - set to transparent/default
-                    tabButton.Background = Brushes.Transparent;
-                    tabButton.BorderThickness = new Thickness(0);
-                    tabButton.BorderBrush = Brushes.Transparent;
+                    tabBorder!.Background = Brushes.Transparent;
+                    tabBorder.BorderThickness = new Thickness(0);
+                    activeUnderline!.Opacity = 0;
                 }
             }
 
@@ -1239,8 +1249,7 @@ namespace SnipShottyBoard.UI
                             noteTab.TextContent = savedNote.TextContent;
                         }
                         
-                        noteTab.ImageFiles = savedNote.ImageFiles ?? new List<string>();
-                        noteTab.ImageTimestamps = savedNote.ImageTimestamps ?? new Dictionary<string, DateTime>();
+                        noteTab.MediaReferences = savedNote.Media ?? new List<MediaReference>();
 
                         // 🔔 Wire up change tracking
                         noteTab.OnDataChanged += () => 
@@ -1307,7 +1316,9 @@ namespace SnipShottyBoard.UI
             catch (Exception ex)
             {
                 OnLogError?.Invoke("Error loading tabs", ex);
-                CreateNewTab(); // Fallback to default tab
+                // Do NOT create a blank tab here — that would cause autosave to overwrite real notes.
+                // Rethrow so the caller can decide how to handle the failure safely.
+                throw;
             }
         }
 
@@ -1319,8 +1330,7 @@ namespace SnipShottyBoard.UI
                 Title = tab.Title,
                 TextContent = tab.Content.TextContent,
                 RichTextContent = tab.Content.RichTextContent,
-                ImageFiles = tab.Content.ImageFiles,
-                ImageTimestamps = tab.Content.ImageTimestamps,
+                Media = tab.Content.MediaReferences,
                 SplitterTextMediaRatio = tab.Content.GetStoredSplitterRatio() // Per-tab splitter position
             }).ToList();
         }
@@ -1380,6 +1390,13 @@ namespace SnipShottyBoard.UI
 
             // 📋 Right-click context menu
             var contextMenu = new ContextMenu();
+
+            // Apply native themed context menu style (from F.0 DarkTheme resources)
+            var menuStyle = Application.Current.FindResource("NativeContextMenuStyle") as System.Windows.Style;
+            if (menuStyle != null)
+            {
+                contextMenu.Style = menuStyle;
+            }
 
             // ✏️ Rename Tab
             var renameItem = new MenuItem { Header = "📝 Rename Tab" };

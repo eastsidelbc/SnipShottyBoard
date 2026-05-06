@@ -97,15 +97,20 @@ namespace SnipShottyBoard.Core.Models
             set
             {
                 if (value == null || value.Count == 0) return;
-                // Only clear if Media is empty (legacy JSON migration).
-                // If Media is already populated (new JSON format), don't overwrite.
-                if (Media.Count == 0)
-                    Media.Clear();
+
+                // Clear existing entries before repopulating — prevents duplicates
+                // on repeated setter calls (e.g., LoadTabs → ImageFiles = data)
+                Media.Clear();
+
                 foreach (var path in value)
                 {
                     var fileName = Path.GetFileName(path);
                     if (!string.IsNullOrEmpty(fileName))
-                        Media.Add(new MediaReference { Filename = fileName, DateAdded = DateTime.Now });
+                    {
+                        // Dedup: skip if this filename already exists
+                        if (!Media.Any(m => m.Filename == fileName))
+                            Media.Add(new MediaReference { Filename = fileName, DateAdded = DateTime.Now });
+                    }
                 }
             }
         }
@@ -125,7 +130,8 @@ namespace SnipShottyBoard.Core.Models
             }
             set
             {
-                if (value == null) return;
+                if (value == null || value.Count == 0) return;
+
                 foreach (var kvp in value)
                 {
                     var fileName = Path.GetFileName(kvp.Key);
@@ -133,9 +139,16 @@ namespace SnipShottyBoard.Core.Models
                     {
                         var existing = Media.FirstOrDefault(m => m.Filename == fileName);
                         if (existing != null)
+                        {
+                            // Update timestamp on existing entry
                             existing.DateAdded = kvp.Value;
+                        }
                         else
+                        {
+                            // Dedup: only add if no matching filename exists
+                            // (the getter computes timestamps from Media, so this is the source of truth)
                             Media.Add(new MediaReference { Filename = fileName, DateAdded = kvp.Value });
+                        }
                     }
                 }
             }

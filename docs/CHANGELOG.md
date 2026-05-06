@@ -8,6 +8,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### ✨ Added
+- **Tab Rename — Edit Mode Visuals**: Double-click tab rename now shows accent-colored border (AccentBrush), indigo glow (AccentGlowEffect), gradient underline, and accent caret. Uses existing tab template elements (TabBorder, ActiveUnderline) for consistent design language. ([Dev Note](docs/devnotes/2026-05-05-sprint-ui5-tab-rename-media-menu.md))
+- **MediaSection — Global Context Menu**: Right-click empty space in media section to apply bulk operations: Size (Small/Medium/Big for all), Hide All / Show All toggle, Delete All (with confirmation). Right-click on individual images still shows per-image menu. ([Dev Note](docs/devnotes/2026-05-05-sprint-ui5-tab-rename-media-menu.md))
+- **Image Viewer — Zoom**: Mouse-wheel zoom (25%–500%) using physical `Width`/`Height` scaling so the `ScrollViewer` scroll boundaries update automatically. `PreviewMouseWheel` intercepts the event before the ScrollViewer can swallow it.
+- **Image Viewer — Pan**: Click-drag to pan when zoomed in. Uses `CaptureMouse()` for smooth out-of-bounds tracking. Distance threshold (3 px) distinguishes a drag from a click. `LostMouseCapture` resets state on system focus steal.
+- **Image Viewer — Double-click to 1:1**: `e.ClickCount > 1` in `MouseLeftButtonDown` — WPF `Image` does not expose `MouseDoubleClick` in XAML (it is a `Control`-only event).
+- **Image Viewer — Fit mode tracking**: `_isInFitMode` flag. Window resize re-fits image only when flag is true. Manual zoom (wheel, double-click, 1:1 button) sets flag false so resize does not clobber intentional zoom.
+- **Image Viewer — 1:1 button resets window size**: `FitActualButton_Click` calls `AutoSizeWindow(currentImage)` then defers `ApplyCurrentZoom` at `DispatcherPriority.Loaded` — same window sizing used when first opening from a thumbnail.
+- **Image Viewer — Default zoom is 1:1**: Images open and navigate at 100% actual pixels. `ApplyOneToOne()` replaces the old `FitToWindow()` call in both `ApplyStaticImage` and `LoadGifAsync`.
+- **Image Viewer — GIF pause on click**: Single click with < 5 px movement toggles GIF playback via `ImageBehavior.GetAnimationController(DisplayImage)?.Pause()/.Play()`. Status bar flashes "⏸️ GIF Paused" / "▶️ Playing" for 800 ms.
+- **Image Viewer — Zoom status bar**: Shows `Fit (X%)`, `100% (1:1)`, or `X%` driven by `_isInFitMode` flag rather than a raw zoom-level comparison.
+
+### 🔒 Fixed
+- **Image Viewer — `MouseDoubleClick` XAML compile error**: `Image` inherits `FrameworkElement`, not `Control`; `MouseDoubleClick` is not available as a XAML attribute. Removed from XAML; double-click now detected via `e.ClickCount > 1` in `MouseLeftButtonDown`.
+- **Image Viewer — `ScrollToCenter` compile error**: `ScrollViewer` has no such method. Replaced with `ScrollToHorizontalOffset(ScrollableWidth/2)` + `ScrollToVerticalOffset(ScrollableHeight/2)` deferred at `DispatcherPriority.Render`.
+- **Image Viewer — `SetIsPaused` compile error**: `ImageBehavior.SetIsPaused` does not exist in WpfAnimatedGif 2.0.2. Replaced with `ImageBehavior.GetAnimationController().Pause()/.Play()`.
+- **Image Viewer — Mouse wheel had no effect**: `ScrollViewer.OnMouseWheel` is a WPF class handler that fires before XAML-attached instance handlers, marking the event handled and swallowing it. Fixed by switching to `PreviewMouseWheel` (fires during tunneling, before any class handler) and setting `e.Handled = true`.
+- **Image Viewer — Keyboard navigation lost after click-away**: `ScrollViewer` is focusable by default; clicking back on the window moved keyboard focus there. ScrollViewer then handled `Left`/`Right` for scrolling, blocking navigation. Fixed by `Focusable="False"` on the ScrollViewer and `this.Activated += (s,e) => this.Focus()` to restore window focus whenever the viewer becomes active.
+- **Image Viewer — Mouse capture could get stuck**: If the OS stole mouse capture (Alt-Tab, system dialog), `_isMouseDragging` was never cleared, corrupting subsequent pan deltas. Fixed by handling `LostMouseCapture` to reset drag state.
+
+### ✨ Added
+- **Context menu dark styling**: Media thumbnail right-click menus now use `NativeContextMenuStyle` (dark background, rounded corners, subtle hover highlight) matching tab context menus. ([Dev Note](docs/devnotes/2026-05-05-sprint-ui4-context-menu-styling.md))
+- **Toggle checkboxes**: Label/Date/Time context menu items use static labels with indigo checkmarks instead of dynamic "Show"/"Hide" text. Click to toggle. Matches VS Code/Photoshop conventions.
+- **Thumbnail context menu**: Right-click any media thumbnail for Copy, Delete, Size (Big/Medium/Small), Hide/Show, Show/Hide Label, Show/Hide Date, Show/Hide Time, and Rename. Uses MaterialDesignIcons for menu icons. Metadata changes persist via `MediaReferences` save/load bridge. ([Dev Note](docs/devnotes/2026-05-05-sprint-ui3.4-context-menu.md))
+
+### 🔧 Changed
+- **Context menu toggles**: Label/Date/Time menu items refactored from individual methods to generic `ToggleMediaBool` helper. Toggle items now use `IsCheckable=true` with `IsChecked` bound to `MediaReference` properties.
+- **Media schema v3**: `MediaReferences` property on `MediaSection`/`NoteTab` bridges full paths ↔ `List<MediaReference>` for direct save/load. `TabManager.GetSaveData()` now writes `SavedNote.Media` directly (no longer `ImageFiles`/`ImageTimestamps`). Schema version bumped 2→3 in `MigrationService`. ([Dev Note](docs/devnotes/2026-05-05-sprint-ui3-2-save-load-bridge.md))
+- **Thumbnail 3-row layout**: Containers now use a 3-row structure (image, label, timestamp) driven by `MediaReference` metadata. Container width is responsive to `ThumbnailSize` (default 150px). Label row is hidden by default (`ShowLabel=false`). `container.Tag` now stores `MediaReference` objects instead of string paths. ([Dev Note](docs/devnotes/2026-05-05-sprint-ui3-3-container-3-row-layout.md))
+
+### 🔒 Fixed
+- **B-SAVE: ContentCardStyle forward reference — repeating save corruption**: `ContentCardHoverStyle` (line 465) used `BasedOn="{StaticResource ContentCardStyle}"` but `ContentCardStyle` was defined at line 984. WPF `StaticResource` cannot forward-reference, causing `XamlParseException` on every startup → `LoadTabs` catch created blank tab → autosave wiped real notes in a loop. Fixed by moving `ContentCardStyle` before `ContentCardHoverStyle`. Also hardened `LoadTabs` catch to rethrow instead of silently creating a blank tab, and `LoadApplicationData` now sets `hasUnsavedChanges = false` on load failure so autosave cannot corrupt disk data. ([Bug log](docs/BUGS.md#b-save))
+- **B-THEME: Theme toggle data loss**: Removed the Toggle Theme button entirely. LightTheme.xaml was missing 21 resource keys causing NoteTab.xaml to crash on load, silently overwriting all note data with an empty blank tab on every autosave. Data recovered from rolling backups. Settings.json forced back to dark mode. ([Bug log](docs/BUGS.md#b-theme))
+- **PackIcon validation**: Fixed `Kind="Pushpin"` → `Kind="PinOutline"`. MDIX 5.3.1 does not have `Pushpin` or `ThumbTack`. Verified all 8 title bar icon names against the installed DLL binary.
+
+### ✨ Added
+- **Title bar icon swap**: Replaced emoji buttons with MaterialDesign PackIcons for consistent sizing and visual weight across all 7 title bar buttons (8 minus removed theme toggle)
+- **Title bar button alignment**: Defined `TitleBarButtonStyle` and `TitleBarPinButtonStyle` with fixed `32x28` sizing, vertical centering, and proper pin state (indigo background + white icon). Added to both dark and light themes.
 - **Single Source of Truth — master.json**: Consolidated all data into a single `master.json` file
   - Replaces separate `notes.json` and `notewindows.json` files
   - `MasterData` model: `{ Version, Windows: List<NoteWindowData>, Settings }`
@@ -55,6 +92,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Focus state triggers subtle glow ring (EditorFocusGlow)
     - Borderless design matches premium Notion-like aesthetic
   - Theme tokens documented in DarkTheme.xaml (AccentBrush, AppBackgroundBrush, etc.)
+
+### 🐛 Fixed
+- **Data Persistence — All saved data lost on restart**: `AtomicFileManager` serialized with camelCase keys (`"windowLeft"`, `"windows"`, etc.) but deserialized with default PascalCase matching → nothing matched → all properties returned defaults → blank app every startup. Fixed all 4 `Deserialize` calls across `LoadWithRecovery`, `VerifyJsonFile`, and `TryRollingBackupRecovery` to use matching `CamelCase` + `PropertyNameCaseInsensitive` options. See Sprint P — Data Persistence Fix
+- **GIF Viewer — Thread ownership crash + missing status bar**: `LoadGifAsync` created `BitmapImage` inside `Task.Run()` on a background thread → `SetAnimatedSource` threw `InvalidOperationException` on UI thread. Fixed by creating `BitmapImage` directly on UI thread (GIFs use `OnDemand` lazy decode, no blocking needed). Added missing `currentImage = bitmap` assignment so status bar shows info and clipboard copy works. See Sprint D Phase 1b
+- **GIF Viewer — Navigation memory leak**: Cycling through GIFs via left/right arrows caused unbounded memory growth. Added `ClearPreviousImage()` called at the start of every `LoadImage()` to release GIF decoders, clear static sources, and purge old cache entries. Added GIF decoder cleanup to `ReleaseImageResources()` on window close. See Sprint D Phase 2
+- **GIF Viewer — Window close memory leak**: Closing the viewer after a GIF left ~120MB permanently stuck. Root cause: `BitmapCacheOption.OnDemand` keeps a file stream + native decoder thread alive even after managed references are nulled. Fixed by disposing `StreamSource` on unfrozen bitmaps, then forcing `GC.Collect()` + `WaitForPendingFinalizers()` to reclaim unmanaged memory. Added `[CLS]` close-path logging with before/after RAM snapshots. See Sprint D Phase 3
 
 ### 🛡️ Reliability
 - **Crash Recovery Buffer**: Silent background journaling captures unsaved text every 2 seconds

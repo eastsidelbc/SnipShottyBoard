@@ -49,8 +49,8 @@ namespace SnipShottyBoard
                         );
                     }
 
-                    // Clean up orphaned images
-                    var imagesDeleted = DataManager.CleanupOrphanedImages();
+                    // Clean up orphaned images (24h grace period protects against crash-race conditions)
+                    var imagesDeleted = DataManager.CleanupOrphanedImages(daysGracePeriod: 1);
                     if (imagesDeleted > 0)
                     {
                         LoggingService.LogInfoStatic(

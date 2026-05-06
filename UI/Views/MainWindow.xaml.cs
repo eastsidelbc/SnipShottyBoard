@@ -10,7 +10,11 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Interop;
 using System.Windows.Threading;
+
+using Wpf.Ui.Controls;
+using Wpf.Ui.Controls;
 
 using SnipShottyBoard.Core.Managers;
 using SnipShottyBoard.Core.Models;
@@ -21,7 +25,7 @@ using SnipShottyBoard.UI;
 
 namespace SnipShottyBoard.UI.Views
 {
-    public partial class MainWindow : Window
+    public partial class MainWindow : FluentWindow
     {
         // 🏷️ Manager instances
         private TabManager tabManager;
@@ -139,7 +143,7 @@ namespace SnipShottyBoard.UI.Views
                 if (currentSettings != null)
                 {
                     themeManager.LoadTheme(currentSettings.IsDarkMode);
-                    loggingService.LogDebug($"🎨 Theme initialized: {(currentSettings.IsDarkMode ? "Dark" : "Light")}");
+                    loggingService.LogDebug($"🎨 Theme initialized: Dark");
                 }
                 else
                 {
@@ -182,8 +186,38 @@ namespace SnipShottyBoard.UI.Views
             {
                 var tempLogger = new LoggingService();
                 tempLogger.LogError("FATAL ERROR in MainWindow constructor", ex);
-                MessageBox.Show($"Fatal error starting application:\n{ex.Message}\n\nCheck console for details.", 
-                               "Application Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Windows.MessageBox.Show($"Fatal error starting application:\n{ex.Message}\n\nCheck console for details.",
+                               "Application Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// Sets the DWM composition background to our dark theme color.
+        /// This is the correct fix for white flash during window resize.
+        /// 
+        /// WHY THIS WORKS:
+        /// Every WPF window has a Win32 HWND background brush set to system white.
+        /// When you resize, Windows paints this HWND brush BEFORE WPF renders.
+        /// Setting Window.Background or Grid.Background is WPF-level — too late.
+        /// HwndSource.CompositionTarget.BackgroundColor sets the actual DWM
+        /// composition background for this HWND so any rendering gap shows dark.
+        /// 
+        /// WHY NOT OnSourceInitialized + WindowChrome:
+        /// Replacing FluentWindow's internal WindowChrome via SetWindowChrome()
+        /// breaks FluentWindow's HWND hook (WM_NCHITTEST) causing ghost/mirrored
+        /// DWM caption buttons to appear when dragging the left resize edge.
+        /// </summary>
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+
+            // Set DWM composition background to our dark app color
+            // #111113 = AppBackgroundBrush
+            var source = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
+            if (source?.CompositionTarget != null)
+            {
+                source.CompositionTarget.BackgroundColor =
+                    System.Windows.Media.Color.FromRgb(0x11, 0x11, 0x13);
             }
         }
 
@@ -349,7 +383,7 @@ namespace SnipShottyBoard.UI.Views
         #endregion
 
         #region Rich Text Formatting
-        private void ApplyRichTextFormatting(RichTextBox richTextBox, string formatType)
+        private void ApplyRichTextFormatting(System.Windows.Controls.RichTextBox richTextBox, string formatType)
         {
             try
             {
@@ -412,20 +446,20 @@ namespace SnipShottyBoard.UI.Views
         {
             // Show developer menu with options like "Open Logs Folder"
             var menu = new ContextMenu();
-            
-            var openLogsItem = new MenuItem 
-            { 
-                Header = "📁 Open Logs Folder", 
-                ToolTip = "Open the folder containing application logs" 
+
+            var openLogsItem = new System.Windows.Controls.MenuItem
+            {
+                Header = "📁 Open Logs Folder",
+                ToolTip = "Open the folder containing application logs"
             };
-            openLogsItem.Click += (s, ev) => 
+            openLogsItem.Click += (s, ev) =>
             {
                 try
                 {
                     var logsFolder = LoggingService.GetLogsFolder();
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(logsFolder) 
-                    { 
-                        UseShellExecute = true 
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(logsFolder)
+                    {
+                        UseShellExecute = true
                     });
                 }
                 catch (Exception ex)
@@ -433,20 +467,119 @@ namespace SnipShottyBoard.UI.Views
                     loggingService.LogError("Failed to open logs folder", ex, "UI");
                 }
             };
-            
+
             menu.Items.Add(openLogsItem);
+
+            var auditItem = new System.Windows.Controls.MenuItem
+            {
+                Header = "🔍 Audit Vault",
+                ToolTip = "Show vault statistics and clean orphaned files"
+            };
+            auditItem.Click += (s, ev) => ShowVaultAudit();
+            menu.Items.Add(auditItem);
+
             menu.PlacementTarget = sender as FrameworkElement;
             menu.IsOpen = true;
         }
 
-        private void Close_Click(object sender, RoutedEventArgs e) => this.Close();
+        private void ShowVaultAudit()
+        {
+            try
+            {
+                var imagesFolder = SnipShottyBoard.Core.Managers.DataManager.GetImagesFolder();
+                var diskFiles = Directory.Exists(imagesFolder) ? Directory.GetFiles(imagesFolder) : Array.Empty<string>();
+                int totalOnDisk = diskFiles.Length;
+
+                // Collect referenced filenames from all open tabs
+                var referencedFilenames = new HashSet<string>();
+                int totalRefs = 0;
+                foreach (var tab in tabManager.Tabs)
+                {
+                    var files = tab.Content.ImageFiles;
+                    totalRefs += files.Count;
+                    foreach (var f in files)
+                        referencedFilenames.Add(Path.GetFileName(f));
+                }
+
+                // Find orphaned files (on disk but not referenced)
+                var orphans = diskFiles.Where(f => !referencedFilenames.Contains(Path.GetFileName(f))).ToList();
+                int orphanCount = orphans.Count;
+
+                // Split orphans by age (24h grace period)
+                var cutoff = DateTime.Now.AddDays(-1);
+                int graceOrphans = 0;
+                foreach (var orphan in orphans)
+                {
+                    try
+                    {
+                        if (File.GetCreationTime(orphan) >= cutoff)
+                            graceOrphans++;
+                    }
+                    catch { /* skip files we can't read */ }
+                }
+                int oldOrphans = orphanCount - graceOrphans;
+
+                // Check for duplicate image entries within notes
+                int dupNotes = 0;
+                foreach (var tab in tabManager.Tabs)
+                {
+                    var filenames = tab.Content.ImageFiles.Select(f => Path.GetFileName(f)).ToList();
+                    if (filenames.Count != filenames.Distinct().Count())
+                        dupNotes++;
+                }
+
+                var result = System.Windows.MessageBox.Show(
+                    this,
+                    $"Vault Audit Results\n" +
+                    $"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+                    $"Total image files on disk:     {totalOnDisk}\n" +
+                    $"Total references in notes:     {totalRefs}\n" +
+                    $"Orphaned files (not referenced): {orphanCount}\n" +
+                    $"  - Older than 24h:           {oldOrphans}\n" +
+                    $"  - Newer than 24h (grace):    {graceOrphans}\n" +
+                    $"Notes with duplicate entries:   {dupNotes}\n" +
+                    $"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+                    $"Do you want to delete {orphanCount} orphaned file(s) now?\n" +
+                    $"(Files within 24h grace period will also be deleted)",
+                    "Vault Audit",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Question);
+
+                if (result == System.Windows.MessageBoxResult.Yes && orphanCount > 0)
+                {
+                    var deleted = SnipShottyBoard.Core.Managers.DataManager.CleanupOrphanedImages(daysGracePeriod: 0);
+                    System.Windows.MessageBox.Show(
+                        this,
+                        $"Deleted {deleted} orphaned file(s).",
+                        "Vault Cleanup Complete",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Information);
+                }
+                else if (orphanCount == 0)
+                {
+                    System.Windows.MessageBox.Show(
+                        this,
+                        "No orphaned files found. Vault is clean!",
+                        "Vault Audit",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                loggingService.LogError("Vault audit failed", ex, "UI");
+                System.Windows.MessageBox.Show(
+                    this,
+                    $"Vault audit failed: {ex.Message}",
+                    "Error",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
+            }
+        }
+
         private void NewTab_Click(object sender, RoutedEventArgs e) => tabManager.CreateNewTab();
         private void DeleteTab_Click(object sender, RoutedEventArgs e) => tabManager.DeleteCurrentTab();
-        private void ToggleTheme_Click(object sender, RoutedEventArgs e) => themeManager.ToggleTheme();
-        
-        /// <summary>
-        /// Opens the application logs folder in Windows Explorer
-        /// </summary>
+
         // 📌 Pin button click - toggle always on top
         private void Pin_Click(object sender, RoutedEventArgs e)
         {
@@ -471,20 +604,6 @@ namespace SnipShottyBoard.UI.Views
             catch (Exception ex)
             {
                 loggingService.LogError("Failed to toggle always on top", ex, "UI");
-            }
-        }
-
-        // − Minimize button click
-        private void Minimize_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                this.WindowState = WindowState.Minimized;
-                loggingService.LogDebug("− Window minimized", "UI");
-            }
-            catch (Exception ex)
-            {
-                loggingService.LogError("Failed to minimize window", ex, "UI");
             }
         }
 
@@ -554,7 +673,6 @@ namespace SnipShottyBoard.UI.Views
             // 🔄 Get current settings from loaded data or create defaults
             var settingsToShow = currentSettings ?? new AppSettings
             {
-                Theme = themeManager.IsDarkMode ? "Dark" : "Light",
                 AutoSaveEnabled = true, // Get from current auto-save timer state
                 AutoSaveIntervalSeconds = 5, // Current interval
                 AlwaysOnTop = this.Topmost,
@@ -579,15 +697,15 @@ namespace SnipShottyBoard.UI.Views
             var contextMenu = new ContextMenu();
 
             // Help option
-            var helpItem = new MenuItem { Header = "📖 Help & Shortcuts" };
+            var helpItem = new System.Windows.Controls.MenuItem { Header = "📖 Help & Shortcuts" };
             helpItem.Click += (s, args) => helpManager.ShowHelpWindow();
 
             // Quick Tips option
-            var tipsItem = new MenuItem { Header = "💡 Quick Tips" };
+            var tipsItem = new System.Windows.Controls.MenuItem { Header = "💡 Quick Tips" };
             tipsItem.Click += (s, args) => helpManager.ShowQuickTips();
 
             // Reset Delete Confirmations option
-            var resetConfirmItem = new MenuItem { Header = "🔄 Reset Delete Confirmations" };
+            var resetConfirmItem = new System.Windows.Controls.MenuItem { Header = "🔄 Reset Delete Confirmations" };
             resetConfirmItem.Click += (s, args) => {
                 tabManager.ResetDeleteConfirmationPreference();
                 CustomDialog.ShowInformation(
@@ -598,7 +716,7 @@ namespace SnipShottyBoard.UI.Views
             };
 
             // About option
-            var aboutItem = new MenuItem { Header = "ℹ️ About" };
+            var aboutItem = new System.Windows.Controls.MenuItem { Header = "ℹ️ About" };
             aboutItem.Click += (s, args) => helpManager.ShowAbout();
 
             contextMenu.Items.Add(helpItem);
@@ -609,7 +727,7 @@ namespace SnipShottyBoard.UI.Views
             contextMenu.Items.Add(aboutItem);
 
             // Show context menu at the help button
-            if (sender is Button helpButton)
+            if (sender is System.Windows.Controls.Button helpButton)
             {
                 contextMenu.PlacementTarget = helpButton;
                 contextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
@@ -641,10 +759,21 @@ namespace SnipShottyBoard.UI.Views
 
                 if (notesToLoad?.Any() == true)
                 {
-                    tabManager.LoadTabs(notesToLoad);
-                    
-                    // 🎨 Refresh tab visuals after theme is loaded
-                    tabManager.RefreshTabVisuals();
+                    try
+                    {
+                        tabManager.LoadTabs(notesToLoad);
+                        // 🎨 Refresh tab visuals after theme is loaded
+                        tabManager.RefreshTabVisuals();
+                    }
+                    catch (Exception loadEx)
+                    {
+                        // LoadTabs threw — real notes are still safe on disk (WindowData.Notes unchanged).
+                        // Show a blank tab for this session but DO NOT mark as changed.
+                        // This prevents autosave from overwriting good data with a blank state.
+                        loggingService.LogError("CRITICAL: LoadTabs failed — data preserved on disk, showing blank tab for this session only", loadEx, "Data");
+                        tabManager.CreateNewTab();
+                        hasUnsavedChanges = false;
+                    }
                 }
                 else
                 {
@@ -669,10 +798,10 @@ namespace SnipShottyBoard.UI.Views
             catch (Exception ex)
             {
                 loggingService.LogError("Error loading app data", ex, "Data");
-                // Create default settings for fallback
                 currentSettings = new AppSettings();
                 tabManager.UpdateSettings(currentSettings);
-                tabManager.CreateNewTab(); // Fallback
+                tabManager.CreateNewTab();
+                hasUnsavedChanges = false;
             }
         }
 
@@ -698,7 +827,6 @@ namespace SnipShottyBoard.UI.Views
                 // Also save global settings (shared across all windows)
                 if (currentSettings != null)
                 {
-                    currentSettings.Theme = themeManager.IsDarkMode ? "Dark" : "Light";
                     currentSettings.AlwaysOnTop = this.Topmost;
                     DataManager.SaveSettings(currentSettings);
                 }

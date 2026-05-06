@@ -12,7 +12,10 @@
              DragLeave="MediaSection_DragLeave">
     
     <!-- 🎨 Media Section with drop target styling -->
-    <Grid Background="Transparent" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+    <Grid Background="Transparent"
+          VerticalAlignment="Stretch"
+          HorizontalAlignment="Stretch"
+          ContextMenuOpening="MediaSection_ContextMenuOpening">
         
         <!-- 📦 Drag Canvas for visual feedback -->
         <Canvas x:Name="DragCanvas" IsHitTestVisible="False" />

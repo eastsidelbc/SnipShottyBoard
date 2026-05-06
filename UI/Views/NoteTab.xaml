@@ -2,11 +2,11 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="clr-namespace:SnipShottyBoard.UI"
-             Background="{DynamicResource AppBackgroundBrush}"
+             Background="Transparent"
              x:Name="NoteTabRoot">
 
     <!-- 📱 TWO RESIZABLE SECTIONS WITH INTERACTIVE SPLITTER -->
-    <Grid Margin="12"
+    <Grid Margin="2"
           Background="Transparent"
           x:Name="ContentGrid"
           Opacity="0">
@@ -131,7 +131,10 @@
         </Border>
 
         <!-- 🖼️ MEDIA SECTION - BOTTOM HALF (resizable) -->
-        <Border Grid.Row="2" Style="{DynamicResource ContentCardHoverStyle}">
+        <Border x:Name="MediaBorder"
+                Grid.Row="2"
+                Style="{DynamicResource ContentCardHoverStyle}"
+                PreviewMouseDown="MediaBorder_PreviewMouseDown">
             <ui:MediaSection x:Name="MediaSectionControl" />
         </Border>
     </Grid>

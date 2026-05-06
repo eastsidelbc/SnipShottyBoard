@@ -78,6 +78,28 @@ namespace SnipShottyBoard.Data
         /// Recommended maximum: 5 GIFs per note
         /// </summary>
         public const int MaxAnimatedGifsPerNote = 5;
+
+        #region Thumbnail Sizes (Schema v3)
+        /// <summary>
+        /// Big thumbnail container width in pixels (default size).
+        /// </summary>
+        public const int ThumbnailSizeBig = 150;
+
+        /// <summary>
+        /// Medium thumbnail container width in pixels.
+        /// </summary>
+        public const int ThumbnailSizeMedium = 100;
+
+        /// <summary>
+        /// Small thumbnail container width in pixels.
+        /// </summary>
+        public const int ThumbnailSizeSmall = 60;
+
+        /// <summary>
+        /// Default thumbnail size — resolves to Big (150px).
+        /// </summary>
+        public const int ThumbnailSizeDefault = ThumbnailSizeBig;
+        #endregion
         #endregion
 
         #region Window Configuration
@@ -113,7 +135,7 @@ namespace SnipShottyBoard.Data
         /// Estimated window chrome height in pixels
         /// Title bar + toolbar + status bar space
         /// </summary>
-        public const int WindowChromeHeight = 115; // 35 + 55 + 25
+        public const int WindowChromeHeight = 55; // ~30 FluentWindow title bar + 25 status bar
 
         /// <summary>
         /// Estimated window chrome width in pixels

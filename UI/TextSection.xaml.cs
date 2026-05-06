@@ -4,10 +4,9 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
-using System.Windows.Input;
 using System.Windows.Markup;
+using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 
 namespace SnipShottyBoard.UI
 {
@@ -51,20 +50,58 @@ namespace SnipShottyBoard.UI
         public TextSection()
         {
             InitializeComponent();
-            
+
+            // 🎯 Zero FlowDocument PagePadding — prevents hidden padding stacking
+            //    on top of RichTextBox Padding, keeping text aligned with placeholder
+            NoteRichTextBox.Document.PagePadding = new Thickness(0);
+
+            // 📐 Force text wrapping by setting PageWidth to available width.
+            //    RichTextBox never wraps by default (scrolls horizontal instead).
+            //    PageWidth constraint makes it wrap like a normal text editor.
+            NoteRichTextBox.SizeChanged += NoteRichTextBox_SizeChanged;
+
             // 🧠 Focus event handlers for better placeholder behavior
             NoteRichTextBox.GotFocus += NoteRichTextBox_GotFocus;
             NoteRichTextBox.LostFocus += NoteRichTextBox_LostFocus;
-            
-            // 🎯 Cursor tracking for better visibility when resized
-            NoteRichTextBox.SelectionChanged += NoteRichTextBox_SelectionChanged;
-            NoteRichTextBox.SizeChanged += NoteRichTextBox_SizeChanged;
-            
-            // 🖱️ Mouse wheel support for scrolling
-            this.PreviewMouseWheel += TextSection_PreviewMouseWheel;
-            
+
             // 🎯 Initialize placeholder visibility
             UpdatePlaceholderVisibility();
+        }
+
+        // 📐 Update PageWidth on resize to maintain wrapping
+        private void NoteRichTextBox_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (NoteRichTextBox.ActualWidth > 0)
+            {
+                NoteRichTextBox.Document.PageWidth = NoteRichTextBox.ActualWidth;
+            }
+        }
+
+        // 🖱️ Mouse wheel scrolling — RichTextBox internal ScrollViewer doesn't
+        //    respond to wheel by default. PreviewMouseWheel scrolls manually.
+        private void NoteRichTextBox_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            var sv = GetScrollViewer(NoteRichTextBox);
+            if (sv != null)
+            {
+                sv.ScrollToVerticalOffset(sv.VerticalOffset - e.Delta);
+                e.Handled = true;
+            }
+        }
+
+        // 📦 Walk visual tree to find RichTextBox's internal ScrollViewer
+        private ScrollViewer GetScrollViewer(DependencyObject parent)
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is ScrollViewer sv)
+                    return sv;
+                var found = GetScrollViewer(child);
+                if (found != null)
+                    return found;
+            }
+            return null;
         }
 
         // 📝 Handle text changes to show/hide placeholder and trigger events
@@ -86,109 +123,6 @@ namespace SnipShottyBoard.UI
             UpdatePlaceholderVisibility();
         }
 
-        // 🎨 Subtle focus border animation — accent border on focus
-        // NOTE: theme brushes are frozen, so we create new unfrozen copies to animate
-        private SolidColorBrush _borderAnimBrush;
-
-        private void NoteRichTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
-        {
-            if (TryFindResource("AccentBrush") is SolidColorBrush accentBrush)
-            {
-                if (_borderAnimBrush == null)
-                {
-                    _borderAnimBrush = new SolidColorBrush((Color)TextBorder.BorderBrush.GetValue(SolidColorBrush.ColorProperty));
-                    TextBorder.BorderBrush = _borderAnimBrush;
-                }
-
-                var anim = new ColorAnimation
-                {
-                    To = accentBrush.Color,
-                    Duration = TimeSpan.FromMilliseconds(150)
-                };
-                _borderAnimBrush.BeginAnimation(SolidColorBrush.ColorProperty, anim);
-            }
-        }
-
-        private void NoteRichTextBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
-        {
-            if (TryFindResource("SubtleDividerBrush") is SolidColorBrush dividerBrush)
-            {
-                if (_borderAnimBrush == null)
-                {
-                    _borderAnimBrush = new SolidColorBrush((Color)TextBorder.BorderBrush.GetValue(SolidColorBrush.ColorProperty));
-                    TextBorder.BorderBrush = _borderAnimBrush;
-                }
-
-                var anim = new ColorAnimation
-                {
-                    To = dividerBrush.Color,
-                    Duration = TimeSpan.FromMilliseconds(150)
-                };
-                _borderAnimBrush.BeginAnimation(SolidColorBrush.ColorProperty, anim);
-            }
-        }
-
-        // 🎯 Handle cursor position changes to ensure visibility
-        private void NoteRichTextBox_SelectionChanged(object sender, RoutedEventArgs e)
-        {
-            // 📍 Scroll to cursor position when selection changes (typing/moving cursor)
-            EnsureCursorVisible();
-        }
-
-        // 📏 Handle size changes to maintain cursor visibility
-        private void NoteRichTextBox_SizeChanged(object sender, SizeChangedEventArgs e)
-        {
-            // 📍 Ensure cursor stays visible when text area is resized
-            if (NoteRichTextBox.IsFocused)
-            {
-                EnsureCursorVisible();
-            }
-        }
-
-        // 🖱️ Handle mouse wheel events for scrolling
-        private void TextSection_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
-        {
-            try
-            {
-                // 📜 Forward mouse wheel events to the RichTextBox's scroll viewer
-                if (NoteRichTextBox.Template.FindName("PART_ContentHost", NoteRichTextBox) is ScrollViewer scrollViewer)
-                {
-                    // 🎯 Calculate scroll amount (negative for natural scrolling direction)
-                    double scrollAmount = -e.Delta * 0.1; // Adjust sensitivity
-                    
-                    // 📜 Apply the scroll
-                    scrollViewer.ScrollToVerticalOffset(scrollViewer.VerticalOffset + scrollAmount);
-                    
-                    // 🛑 Mark event as handled to prevent bubbling
-                    e.Handled = true;
-                }
-            }
-            catch
-            {
-                // 🛡️ Ignore errors in mouse wheel handling
-            }
-        }
-
-        // 📍 Ensure the cursor/caret is always visible
-        private void EnsureCursorVisible()
-        {
-            try
-            {
-                // 🎯 Get the caret position and scroll to it
-                var caretPosition = NoteRichTextBox.CaretPosition;
-                var rect = caretPosition.GetCharacterRect(LogicalDirection.Forward);
-                
-                // 📜 Scroll to make the caret visible
-                if (rect.Y < 0 || rect.Y + rect.Height > NoteRichTextBox.ActualHeight)
-                {
-                    NoteRichTextBox.ScrollToVerticalOffset(rect.Y);
-                }
-            }
-            catch
-            {
-                // 🛡️ Ignore errors in cursor positioning
-            }
-        }
 
         // 🧠 Update placeholder visibility based on text content
         private void UpdatePlaceholderVisibility()
@@ -196,6 +130,13 @@ namespace SnipShottyBoard.UI
             PlaceholderText.Visibility = string.IsNullOrWhiteSpace(GetPlainText()) 
                 ? Visibility.Visible 
                 : Visibility.Collapsed;
+        }
+
+        // 🎯 Focus the editor and place cursor at the beginning
+        public void FocusEditor()
+        {
+            NoteRichTextBox.Focus();
+            NoteRichTextBox.CaretPosition = NoteRichTextBox.Document.ContentStart;
         }
 
         // 📝 Get plain text from RichTextBox

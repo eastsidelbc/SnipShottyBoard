@@ -34,10 +34,9 @@ namespace SnipShottyBoard.UI
         /// 🖌️ Get a brush resource safely with automatic fallbacks
         /// </summary>
         /// <param name="resourceKey">Brush resource key</param>
-        /// <param name="lightFallback">Fallback for light theme</param>
-        /// <param name="darkFallback">Fallback for dark theme</param>
+        /// <param name="fallback">Fallback brush if resource not found</param>
         /// <returns>Brush or appropriate fallback</returns>
-        public static Brush GetBrushResource(string resourceKey, Brush lightFallback = null, Brush darkFallback = null)
+        public static Brush GetBrushResource(string resourceKey, Brush? fallback = null)
         {
             try
             {
@@ -48,18 +47,18 @@ namespace SnipShottyBoard.UI
                 // Smart fallbacks based on resource name patterns
                 if (resourceKey.Contains("Background"))
                 {
-                    return lightFallback ?? SystemColors.WindowBrush;
+                    return fallback ?? SystemColors.WindowBrush;
                 }
                 else if (resourceKey.Contains("Foreground"))
                 {
-                    return darkFallback ?? SystemColors.WindowTextBrush;
+                    return fallback ?? SystemColors.WindowTextBrush;
                 }
                 else if (resourceKey.Contains("Border"))
                 {
-                    return new SolidColorBrush(Colors.Gray);
+                    return fallback ?? new SolidColorBrush(Colors.Gray);
                 }
                 
-                return lightFallback ?? SystemColors.ControlBrush;
+                return fallback ?? SystemColors.ControlBrush;
             }
         }
 

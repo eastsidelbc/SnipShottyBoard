@@ -50,8 +50,8 @@
     <SolidColorBrush x:Key="ScrollBarThumbHoverBrush" Color="{StaticResource ScrollBarThumbHoverColor}" />
     <SolidColorBrush x:Key="ScrollBarThumbPressedBrush" Color="{StaticResource ScrollBarThumbPressedColor}" />
 
-    <!-- 🎯 Modern Minimal Scrollbar Style -->
-    <Style x:Key="ModernScrollBarStyle" TargetType="ScrollBar">
+    <!-- 🎯 Modern Minimal Scrollbar Style — IMPLICIT (no x:Key = applies to every ScrollBar) -->
+    <Style TargetType="ScrollBar">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Width" Value="4" />
@@ -159,7 +159,7 @@
         </Style.Triggers>
     </Style>
 
-    <!-- 📜 Apply Modern Scrollbar to ScrollViewer -->
+    <!-- 📜 Modern ScrollViewer Style — IMPLICIT (no x:Key = applies to every ScrollViewer) -->
     <Style TargetType="ScrollViewer">
         <Setter Property="Template">
             <Setter.Value>
@@ -184,7 +184,6 @@
                         <!-- Vertical scrollbar -->
                         <ScrollBar x:Name="PART_VerticalScrollBar"
                                    Grid.Row="0" Grid.Column="1"
-                                   Style="{StaticResource ModernScrollBarStyle}"
                                    Orientation="Vertical"
                                    ViewportSize="{TemplateBinding ViewportHeight}"
                                    Maximum="{TemplateBinding ScrollableHeight}"
@@ -194,7 +193,6 @@
                         <!-- Horizontal scrollbar -->
                         <ScrollBar x:Name="PART_HorizontalScrollBar"
                                    Grid.Row="1" Grid.Column="0"
-                                   Style="{StaticResource ModernScrollBarStyle}"
                                    Orientation="Horizontal"
                                    ViewportSize="{TemplateBinding ViewportWidth}"
                                    Maximum="{TemplateBinding ScrollableWidth}"
@@ -461,11 +459,39 @@
         </Style.Triggers>
     </Style>
 
-    <!-- ✨ Card Hover Style — subtle scale + glow on hover -->
-    <Style x:Key="ContentCardHoverStyle" TargetType="Border" BasedOn="{StaticResource ContentCardStyle}">
+    <!-- 🃏 Content Card Container — solid zinc card with soft shadow -->
+    <Style x:Key="ContentCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource ContentCardBrush}" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="8" />
+        <Setter Property="Margin" Value="0,4" />
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect Color="#000000"
+                                  Direction="270"
+                                  ShadowDepth="2"
+                                  Opacity="0.25"
+                                  BlurRadius="6"/>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ✨ Card Hover Style — transparent at rest, purple glow on hover and focus -->
+    <Style x:Key="ContentCardHoverStyle" TargetType="Border"
+           BasedOn="{StaticResource ContentCardStyle}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="Effect" Value="{x:Null}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="1" />
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Effect" Value="{DynamicResource HoverGlow}" />
+                <Setter Property="Effect" Value="{DynamicResource SectionHoverGlow}" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                <Setter Property="Effect" Value="{DynamicResource EditorFocusGlow}" />
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -862,12 +888,19 @@
                       BlurRadius="12"
                       Opacity="0.4"/>
 
-    <!-- ✨ Hover Glow Effect -->
+    <!-- ✨ Hover Glow Effect — soft depth grey for section hover states -->
     <DropShadowEffect x:Key="HoverGlow"
                       Color="#FFFFFF"
                       ShadowDepth="0"
-                      Opacity="0.08"
-                      BlurRadius="8"/>
+                      Opacity="0.15"
+                      BlurRadius="12"/>
+
+    <!-- ✨ Section Hover Glow — soft purple ambient for section hover state -->
+    <DropShadowEffect x:Key="SectionHoverGlow"
+                      Color="#6366F1"
+                      ShadowDepth="0"
+                      BlurRadius="12"
+                      Opacity="0.12"/>
 
     <!-- ✨ Close Button Danger Glow -->
     <DropShadowEffect x:Key="DangerGlow"
@@ -891,19 +924,201 @@
         <Setter Property="CornerRadius" Value="4" />
     </Style>
 
-    <!-- 🃏 Content Card Container — solid zinc card with soft shadow -->
-    <Style x:Key="ContentCardStyle" TargetType="Border">
-        <Setter Property="Background" Value="{DynamicResource ContentCardBrush}" />
-        <Setter Property="CornerRadius" Value="6" />
-        <Setter Property="Padding" Value="8" />
-        <Setter Property="Margin" Value="0,4" />
-        <Setter Property="Effect">
+    <!-- 🪟 Native Context Menu Style — dark themed right-click menus -->
+    <Style x:Key="NativeContextMenuStyle" TargetType="ContextMenu">
+        <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="4,2" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
             <Setter.Value>
-                <DropShadowEffect Color="#000000"
-                                  Direction="270"
-                                  ShadowDepth="2"
-                                  Opacity="0.25"
-                                  BlurRadius="6"/>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}">
+                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 🎯 Title Bar Action Button — 30px height matches WPF-UI system buttons (TitleBarButton default Height="30") -->
+    <Style x:Key="TitleBarButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{DynamicResource AppForegroundBrush}" />
+        <Setter Property="Width" Value="34" />
+        <Setter Property="Height" Value="30" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="1,0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="ButtonBorder"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="4"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ButtonBorder" Property="Background"
+                                    Value="{DynamicResource HoverTransparentBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="ButtonBorder" Property="Background"
+                                    Value="{DynamicResource ActiveTransparentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 📌 Title Bar Pin Button — same base as action button, adds Tag=Pinned trigger -->
+    <Style x:Key="TitleBarPinButtonStyle" TargetType="Button"
+           BasedOn="{StaticResource TitleBarButtonStyle}">
+        <Style.Triggers>
+            <!-- Active pinned state: indigo background accent -->
+            <Trigger Property="Tag" Value="Pinned">
+                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                <Setter Property="Foreground" Value="White" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- 📋 Context Menu Item — smooth hover animations matching buttons -->
+    <Style TargetType="MenuItem">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource AppForegroundBrush}" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Grid>
+                        <Border x:Name="MenuItemBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Icon / Glyph area -->
+                                <ContentPresenter x:Name="Icon"
+                                                  Grid.Column="0"
+                                                  Width="16"
+                                                  Height="16"
+                                                  Margin="0,0,8,0"
+                                                  VerticalAlignment="Center"
+                                                  Content="{TemplateBinding Icon}"
+                                                  ContentSource="Icon" />
+
+                                <!-- Checkmark (for IsCheckable items) — indigo, hidden by default -->
+                                <Path x:Name="CheckMark"
+                                      Grid.Column="0"
+                                      Width="16"
+                                      Height="16"
+                                      Margin="0,0,8,0"
+                                      VerticalAlignment="Center"
+                                      Data="M0,4 L3,8 L9,1"
+                                      Stroke="#6366F1"
+                                      StrokeThickness="2"
+                                      Visibility="Collapsed" />
+
+                                <!-- Header text -->
+                                <ContentPresenter x:Name="HeaderHost"
+                                                  Grid.Column="1"
+                                                  VerticalAlignment="Center"
+                                                  ContentSource="Header" />
+
+                                <!-- Submenu arrow (if has items) -->
+                                <Path x:Name="SubMenuArrow"
+                                      Grid.Column="2"
+                                      Width="8" Height="8"
+                                      Margin="8,0,0,0"
+                                      VerticalAlignment="Center"
+                                      HorizontalAlignment="Right"
+                                      SnapsToDevicePixels="True"
+                                      Data="M 0 0 L 4 4 L 0 8 Z"
+                                      Fill="{DynamicResource AppForegroundBrush}"
+                                      Visibility="Collapsed" />
+                            </Grid>
+                        </Border>
+
+                        <!-- Submenu popup -->
+                        <Popup x:Name="SubMenuPopup"
+                               IsOpen="{TemplateBinding IsSubmenuOpen}"
+                               Placement="Right"
+                               HorizontalOffset="6"
+                               AllowsTransparency="True"
+                               Focusable="False">
+                            <Border Background="{DynamicResource AppBackgroundBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="4,2">
+                                <ItemsPresenter />
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <!-- Show arrow when MenuItem has sub-items -->
+                        <Trigger Property="HasItems" Value="True">
+                            <Setter TargetName="SubMenuArrow" Property="Visibility" Value="Visible" />
+                        </Trigger>
+
+                        <!-- Show indigo checkmark for checked items -->
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="CheckMark" Property="Visibility" Value="Visible" />
+                        </Trigger>
+
+                        <!-- Hover highlight -->
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="MenuItemBorder" Property="Background" Value="#1AFFFFFF" />
+                        </Trigger>
+
+                        <!-- Keyboard nav highlight -->
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="MenuItemBorder" Property="Background" Value="#1AFFFFFF" />
+                        </Trigger>
+
+                        <!-- Disabled state -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 📋 Context Menu Separator — subtle divider line -->
+    <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
+        <Setter Property="Background" Value="#FF27272A" />
+        <Setter Property="Height" Value="1" />
+        <Setter Property="Margin" Value="4,4" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Separator">
+                    <Border Background="{TemplateBinding Background}"
+                            Height="{TemplateBinding Height}" />
+                </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>
