@@ -862,32 +862,69 @@ namespace SnipShottyBoard.UI.Views
                     loggingService.LogDebug("✅ Position tracker disposed");
                 }
 
-                // 🪟 Sticky-Notes-style restore tracking:
-                // If other MainWindow instances are still open, this is a per-window
-                // close — mark this one's IsOpen=false so it does NOT reopen next launch.
-                // If this is the LAST MainWindow, leave IsOpen=true so the app reopens
-                // it next launch (matches Windows Sticky Notes app behavior).
-                if (WindowData != null)
-                {
-                    var otherOpenWindows = Application.Current.Windows
-                        .OfType<MainWindow>()
-                        .Where(w => !ReferenceEquals(w, this))
-                        .Count();
-
-                    if (otherOpenWindows > 0)
-                    {
-                        WindowData.IsOpen = false;
-                        loggingService.LogDebug($"🪟 Per-window close: IsOpen=false ({otherOpenWindows} other window(s) still open)");
-                    }
-                    else
-                    {
-                        loggingService.LogDebug("🪟 Last window closing: preserving IsOpen=true for next launch");
-                    }
-                }
+                // 🪟 Sticky-Notes-style restore tracking — DEFERRED DECISION
+                // ────────────────────────────────────────────────────────────
+                // We CANNOT decide IsOpen here, because at this moment we can't
+                // tell apart:
+                //   (a) user clicked X on this window while app keeps running
+                //       → should set IsOpen=false (this one stays closed)
+                //   (b) OS / taskbar "close all windows" is closing every window
+                //       sequentially → should leave IsOpen=true on every one
+                //       so they all reopen next launch
+                //
+                // In case (b), each Closing handler fires one at a time on the
+                // UI thread, and the OTHER MainWindows are still in
+                // Application.Current.Windows when this one's handler runs —
+                // identical signal to case (a). Counting siblings here is wrong.
+                //
+                // FIX: Save now with IsOpen=true (current state). Then schedule
+                // a deferred check at ApplicationIdle priority. The dispatcher
+                // processes the entire WM_CLOSE burst first; only after the
+                // burst settles does our callback run. At that point:
+                //   - Single close: other MainWindow(s) still alive → flip
+                //     this window's IsOpen=false and save again.
+                //   - Close-all:    no MainWindows alive → app is exiting →
+                //     skip the flip → IsOpen stays true → all restore.
+                // ────────────────────────────────────────────────────────────
+                var capturedWindowData = WindowData;
 
                 // 💾 ALWAYS save window state (position/size) on close, regardless of content changes
                 SaveApplicationData();
-                loggingService.LogDebug("💾 Window state saved on close");
+                loggingService.LogDebug("💾 Window state saved on close (IsOpen pending deferred decision)");
+
+                if (capturedWindowData != null)
+                {
+                    Application.Current?.Dispatcher.BeginInvoke(
+                        new Action(() =>
+                        {
+                            try
+                            {
+                                var stillAliveOthers = Application.Current?.Windows
+                                    .OfType<MainWindow>()
+                                    .Count() ?? 0;
+
+                                if (stillAliveOthers > 0)
+                                {
+                                    capturedWindowData.IsOpen = false;
+                                    LoggingService.LogDebugStatic(
+                                        $"🪟 Deferred: single-window close confirmed ({stillAliveOthers} other window(s) alive) → IsOpen=false, resaving",
+                                        "Lifecycle");
+                                    NoteWindowManager.Instance.SaveNoteWindows();
+                                }
+                                else
+                                {
+                                    LoggingService.LogDebugStatic(
+                                        "🪟 Deferred: no MainWindows alive → close-all detected → preserving IsOpen=true",
+                                        "Lifecycle");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                LoggingService.LogErrorStatic("Deferred IsOpen decision failed", ex, "Lifecycle");
+                            }
+                        }),
+                        System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                }
 
                 // 🛑 Stop and dispose timers
                 _autoSaveTimer?.Stop();

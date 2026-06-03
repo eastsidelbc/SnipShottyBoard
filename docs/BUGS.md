@@ -9,6 +9,94 @@
 
 ## OPEN BUGS
 
+### B-CLOSEALL — Taskbar "Close all windows" only restored one window on next launch (FIXED 2026-06-03)
+```
+Status:    FIXED
+Severity:  HIGH — broke the multi-window restore promise of v1.7.0
+Found:     2026-06-03 (regression in own fix — caught same day)
+Fixed:     2026-06-03
+
+SYMPTOMS:
+  • Open 2 (or more) MainWindow instances, each with their own tabs/data.
+  • Right-click SnipShottyBoard in Windows taskbar → "Close all windows".
+  • Reopen the app.
+  • Only ONE window restores instead of all of them.
+  • Single-window-close behavior (Scenario B in v1.7.0 fix) still worked correctly.
+
+EVIDENCE FROM DISK:
+  master.json after the close-all showed:
+    "My Notes" → isActive=true, isOpen=false  ← incorrectly marked
+    "Main"     → isActive=true, isOpen=true
+  Both windows were visibly open when the user triggered taskbar close-all.
+
+ROOT CAUSE — synchronous sibling count can't distinguish intent:
+  v1.7.0's MainWindow_Closing handler decided IsOpen by counting other
+  MainWindow instances still in Application.Current.Windows:
+
+    var otherOpenWindows = Application.Current.Windows
+        .OfType<MainWindow>()
+        .Where(w => !ReferenceEquals(w, this))
+        .Count();
+
+    if (otherOpenWindows > 0) WindowData.IsOpen = false;
+    else                       /* preserve IsOpen=true */;
+
+  When the OS closes every window via taskbar "Close all windows", each
+  MainWindow's Closing fires sequentially on the UI thread:
+    1. "My Notes".Closing: "Main" still in Windows collection → counts 1
+       → sets IsOpen=false → saves.   ← WRONG, but indistinguishable
+       from a real single-window close.
+    2. "Main".Closing: "My Notes" already destroyed and removed →
+       counts 0 → leaves IsOpen=true → saves.
+
+  Synchronously inside one Closing handler there is no signal that
+  identifies "the next window is also about to close." Both single-close
+  and close-all look identical at that instant.
+
+WHAT WE TRIED FIRST (and rejected):
+  • Hooking SessionEnding — only fires for Windows logoff/shutdown, not
+    taskbar "close all windows."
+  • Tracking a static "shutdown in progress" flag in OnExit — fires too
+    late, after all Closing handlers have already written IsOpen=false.
+  • Detecting close-all via SC_CLOSE source — Win32 makes title-bar X and
+    taskbar close indistinguishable at the message level.
+
+FIX APPLIED — defer the IsOpen=false decision to ApplicationIdle:
+  In MainWindow_Closing:
+    1. Save normally with IsOpen=true (current state).
+    2. Schedule a callback at DispatcherPriority.ApplicationIdle via
+       Application.Current.Dispatcher.BeginInvoke(...).
+    3. The dispatcher processes the entire queued WM_CLOSE burst before
+       running the ApplicationIdle work item.
+    4. When the callback runs:
+         • If other MainWindow instances are still alive in
+           Application.Current.Windows → single-window close → flip
+           captured WindowData.IsOpen=false and resave via
+           NoteWindowManager.Instance.SaveNoteWindows().
+         • If no MainWindow instances remain → close-all happened → app
+           is exiting → leave everything alone → IsOpen=true persists
+           for every window → all restore next launch.
+
+VERIFICATION:
+  • Scenario A — Open 2+ windows, taskbar right-click → Close all.
+    Reopen app. All windows restored. ✅
+  • Scenario B — Open 3 windows. Close one individually, then another.
+    Close the last one. Reopen app. Only the last-closed window
+    restored (matches Windows Sticky Notes app). ✅
+
+FILES CHANGED:
+  • UI/Views/MainWindow.xaml.cs — lines ~870-925
+    Replaced inline sibling-count IsOpen block with deferred
+    Dispatcher.BeginInvoke at ApplicationIdle priority.
+
+LESSON LEARNED:
+  When deciding "what is the user trying to do?" from a stream of OS
+  messages that arrive synchronously, NEVER decide at the moment the
+  first message arrives. Defer the decision until the message burst
+  has fully drained — that is the only moment the system can tell
+  "one message" from "many messages in rapid succession."
+```
+
 ### B-LABELSIZE — Per-image v3 fields (Label, ThumbnailSize, visibility flags) reset to defaults on every load (FIXED 2026-06-03)
 ```
 Status:    FIXED

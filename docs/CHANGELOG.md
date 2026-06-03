@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.1] – 2026-06-03
+
+### 🔒 Fixed
+- **B-CLOSEALL — Taskbar "Close all windows" only restored one window**: The v1.7.0 multi-window restore tracked `IsOpen` synchronously in `MainWindow_Closing` by counting siblings in `Application.Current.Windows`. That count cannot distinguish (a) user clicking X on one window while the app continues from (b) the OS closing every window in sequence to exit the app — in both cases siblings are still in the collection when each window's Closing fires. Result: closing the program via taskbar right-click "Close all windows" marked all-but-one as `IsOpen=false`. Fixed by deferring the `IsOpen=false` decision via `Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle)`. The callback runs only after the entire WM_CLOSE burst settles — at that point, other living `MainWindow` instances mean "single close," none mean "close-all." Sticky Notes parity preserved. ([Dev Note](docs/devnotes/2026-06-03-bug-closeall-deferred-isopen.md))
+
+## [1.7.0] – 2026-06-03
+
 ### 🔒 Fixed
 - **B-LABELSIZE — Per-image customization lost on every restart**: `SavedNote` had two `[Obsolete]` legacy accessors (`ImageFiles`, `ImageTimestamps`) that `System.Text.Json` still round-tripped. On load, the `imageFiles` setter ran `Media.Clear()` and recreated `MediaReference` objects with default v3 values, wiping every user-set Label, ThumbnailSize, ShowLabel, ShowDate, ShowTime, and IsHidden. Fixed by adding `[JsonIgnore]` to both legacy properties. Also fixed `TabManager.GetSaveData()` losing `DataVersion` and `TabOrder` on every save. ([Dev Note](docs/devnotes/2026-06-03-bug-label-size-multiwindow-restore.md))
 - **B-MULTIWIN — Only first window reopened at startup**: `App.xaml` used `StartupUri` to create exactly one `MainWindow`, and `MainWindow_Closing` never updated state to distinguish per-window close from app exit. Replaced with explicit `RestoreOpenWindows()` in `App.OnStartup` that opens every window flagged `IsOpen=true` at last shutdown (Windows Sticky Notes app behavior). New `IsOpen` field on `NoteWindowData` is flipped to false only when closing a window while others are still open; the last window preserves its `IsOpen=true` for next launch. ([Dev Note](docs/devnotes/2026-06-03-bug-label-size-multiwindow-restore.md))

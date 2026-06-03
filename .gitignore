@@ -48,6 +48,9 @@ publish/
 .cursorignore
 skills-lock.json
 
+# Local release build outputs (uploaded to GitHub Releases, not tracked in repo)
+releases/
+
 # Scratch files
 DeepCodeAuditPrompt.md
 deepaudit.md
