@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.3] – 2026-06-03
+
+### 🔒 Fixed
+- **Pin button (Always on Top) accent color instant on click**: Clicking the 📌 pin button while keeping the mouse over it now immediately shows the indigo accent background. Previously the hover state overrode the pinned state until the mouse moved away. Root cause: `ControlTemplate.Triggers` have higher precedence than `Style.Triggers` — the hover trigger inside the base template was directly setting `ButtonBorder.Background`, overwriting the accent color set by the Style trigger. Fixed by giving `TitleBarPinButtonStyle` its own `ControlTemplate` with a `MultiTrigger` for `(IsMouseOver=True AND Tag=Pinned)` listed after the plain hover trigger — WPF applies the last matching trigger, so the multi wins and keeps the accent visible immediately.
+
+### 🛠️ Tooling
+- **Automated release script**: Added `.cursor/rules/release.mdc` — saying "push to github with release" now automatically bumps versions, builds the exe, creates the release folder, commits, tags, and publishes to GitHub Releases in one shot.
+
 ## [1.7.2] – 2026-06-03
 
 ### 🛡️ Security

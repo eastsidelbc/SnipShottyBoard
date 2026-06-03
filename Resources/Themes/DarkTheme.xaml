@@ -991,16 +991,51 @@
         </Setter>
     </Style>
 
-    <!-- 📌 Title Bar Pin Button — same base as action button, adds Tag=Pinned trigger -->
+    <!-- 📌 Title Bar Pin Button — own Template so hover cannot override pinned accent color.
+         MultiTrigger (IsMouseOver=True AND Tag=Pinned) is listed after the plain
+         IsMouseOver trigger; WPF applies the last matching trigger, so the multi wins
+         and keeps AccentBrush visible while the mouse is still over the button. -->
     <Style x:Key="TitleBarPinButtonStyle" TargetType="Button"
            BasedOn="{StaticResource TitleBarButtonStyle}">
         <Style.Triggers>
-            <!-- Active pinned state: indigo background accent -->
             <Trigger Property="Tag" Value="Pinned">
                 <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
                 <Setter Property="Foreground" Value="White" />
             </Trigger>
         </Style.Triggers>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="ButtonBorder"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="4"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <!-- Plain hover (not pinned) -->
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ButtonBorder" Property="Background"
+                                    Value="{DynamicResource HoverTransparentBrush}" />
+                        </Trigger>
+                        <!-- Hover WHILE pinned — must come after plain hover to win -->
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsMouseOver" Value="True" />
+                                <Condition Property="Tag" Value="Pinned" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="ButtonBorder" Property="Background"
+                                    Value="{DynamicResource AccentBrush}" />
+                        </MultiTrigger>
+                        <!-- Pressed always shows active state -->
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="ButtonBorder" Property="Background"
+                                    Value="{DynamicResource ActiveTransparentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- 📋 Context Menu Item — smooth hover animations matching buttons -->
