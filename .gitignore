@@ -46,7 +46,11 @@ publish/
 .agents/
 .cursor/
 .cursorignore
+.cursorrules
 skills-lock.json
+
+# Local integrations / MCP server configs (machine-specific, not for contributors)
+integrations/
 
 # Local release build outputs (uploaded to GitHub Releases, not tracked in repo)
 releases/

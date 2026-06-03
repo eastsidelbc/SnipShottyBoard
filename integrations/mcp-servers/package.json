@@ -1,9 +1,0 @@
-{
-  "name": "snipshottyboard-mcp-server",
-  "type": "module",
-  "version": "1.0.0",
-  "description": "SnipShottyBoard MCP Server for Claude Desktop",
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.13.1"
-  }
-}
