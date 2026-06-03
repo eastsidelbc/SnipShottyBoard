@@ -2,7 +2,7 @@
 
 > A sticky notes app, but **better** and **professional** — a floating desktop board for text snippets and pasted screenshots that lives next to your workflow.
 
-![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?logo=windows) ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet) ![WPF](https://img.shields.io/badge/UI-WPF-1A78AC) ![Version](https://img.shields.io/badge/version-1.7.1-6366F1) ![Status](https://img.shields.io/badge/status-active%20development-orange)
+![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?logo=windows) ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet) ![WPF](https://img.shields.io/badge/UI-WPF-1A78AC) ![Version](https://img.shields.io/badge/version-1.7.2-6366F1) ![Status](https://img.shields.io/badge/status-active%20development-orange)
 
 ---
 
@@ -218,6 +218,7 @@ SnipShottyBoard/
 - Multi-window restore (Sticky Notes app behavior, as of `v1.7.1`)
 - Per-image label / size / visibility persistence (as of `v1.7.1`)
 - FluentWindow chrome with pin, drop shadows, dark theme
+- Path-jail guards on all image file operations — tampered data cannot escape the app vault (as of `v1.7.2`)
 
 **Known limitations**
 - Light theme is incomplete (intentionally not exposed in the UI — see `B-THEME` in `docs/BUGS.md`).
