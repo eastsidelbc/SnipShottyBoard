@@ -10,9 +10,10 @@
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="None"
         ResizeMode="CanResize"
+        WindowCornerPreference="Round"
         Background="{DynamicResource ContentCardBrush}">
 
-    <Grid Background="{DynamicResource ContentCardBrush}">
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -73,7 +74,7 @@
         </ui:TitleBar>
 
         <!-- 🖼️ Image display area with Zoom & Pan -->
-        <Border Grid.Row="1" Background="{DynamicResource ContentCardBrush}">
+        <Border Grid.Row="1">
             <ScrollViewer x:Name="ImageScrollViewer"
                           Focusable="False"
                           HorizontalScrollBarVisibility="Hidden"

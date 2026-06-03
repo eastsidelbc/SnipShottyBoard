@@ -24,18 +24,23 @@ namespace SnipShottyBoard.Infrastructure.Logging
         /// </summary>
         private static ILogger CreateLogger()
         {
+#if DEBUG
+            var minLevel = LogEventLevel.Debug;
+#else
+            var minLevel = LogEventLevel.Information;
+#endif
             try
             {
                 var logFolder = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), 
-                    "SnipShottyBoard", 
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "SnipShottyBoard",
                     "logs");
-                
+
                 Directory.CreateDirectory(logFolder);
                 LogFilePath = Path.Combine(logFolder, "snipshottyboard-.log");
 
                 var config = new LoggerConfiguration()
-                    .MinimumLevel.Debug()
+                    .MinimumLevel.Is(minLevel)
                     .WriteTo.File(
                         LogFilePath,
                         rollingInterval: RollingInterval.Day,
@@ -50,7 +55,7 @@ namespace SnipShottyBoard.Infrastructure.Logging
             {
                 // Fallback to a minimal logger if file creation fails
                 return new LoggerConfiguration()
-                    .MinimumLevel.Debug()
+                    .MinimumLevel.Is(minLevel)
                     .CreateLogger();
             }
         }

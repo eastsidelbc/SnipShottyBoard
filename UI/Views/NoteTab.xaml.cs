@@ -75,6 +75,10 @@ namespace SnipShottyBoard.UI.Views
         // 🔔 Event to notify when data changes (for auto-save)
         public event Action OnDataChanged;
 
+        // Stored handler references so they can be unsubscribed in Dispose()
+        private readonly Action _onTextChangedHandler;
+        private readonly Action _onMediaChangedHandler;
+
         // 📐 Event to notify when splitter ratio changes (for persistence)
         // Passes the new ratio value to the parent for saving
         public event Action<double> OnSplitterRatioChanged;
@@ -86,13 +90,18 @@ namespace SnipShottyBoard.UI.Views
         private bool isDraggingSplitter = false;
         private Point lastMousePosition;
 
+        // 🎨 Media border click glow — guard against duplicate subscriptions
+        private bool _mediaBorderLeaveSubscribed = false;
+
         public NoteTab()
         {
             InitializeComponent();
             
-            // 🔗 Wire up events from child components
-            TextSectionControl.OnTextChanged += () => OnDataChanged?.Invoke();
-            MediaSectionControl.OnMediaChanged += () => OnDataChanged?.Invoke();
+            // 🔗 Wire up events from child components — stored for unsubscription in Dispose()
+            _onTextChangedHandler = () => OnDataChanged?.Invoke();
+            _onMediaChangedHandler = () => OnDataChanged?.Invoke();
+            TextSectionControl.OnTextChanged += _onTextChangedHandler;
+            MediaSectionControl.OnMediaChanged += _onMediaChangedHandler;
             
             // 🎯 Initialize proportional sizing (50/50 split by default)
             InitializeSplitterSizing();
@@ -290,7 +299,11 @@ namespace SnipShottyBoard.UI.Views
             MediaBorder.BorderBrush = (Brush)FindResource("AccentBrush");
             MediaBorder.Effect = (Effect)FindResource("EditorFocusGlow");
 
-            MediaBorder.MouseLeave += MediaBorder_MouseLeave;
+            if (!_mediaBorderLeaveSubscribed)
+            {
+                MediaBorder.MouseLeave += MediaBorder_MouseLeave;
+                _mediaBorderLeaveSubscribed = true;
+            }
         }
 
         private void MediaBorder_MouseLeave(object sender, MouseEventArgs e)
@@ -298,6 +311,7 @@ namespace SnipShottyBoard.UI.Views
             MediaBorder.BorderBrush = Brushes.Transparent;
             MediaBorder.Effect = null;
             MediaBorder.MouseLeave -= MediaBorder_MouseLeave;
+            _mediaBorderLeaveSubscribed = false;
         }
 
         // 🖼️ Delegate image addition to MediaSection
@@ -317,6 +331,10 @@ namespace SnipShottyBoard.UI.Views
         {
             try
             {
+                // Unsubscribe child events — prevents TextSection/MediaSection from keeping this tab alive
+                TextSectionControl.OnTextChanged -= _onTextChangedHandler;
+                MediaSectionControl.OnMediaChanged -= _onMediaChangedHandler;
+
                 // 🧹 Dispose MediaSection if it implements IDisposable
                 MediaSectionControl?.Dispose();
                 

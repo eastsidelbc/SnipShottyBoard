@@ -19,6 +19,9 @@ namespace SnipShottyBoard.UI
         // 🔔 Event to notify when text content changes
         public event Action OnTextChanged;
 
+        // Cached plain-text — updated only on actual edits, not on every status-bar tick (LEAK-20)
+        private string _cachedTextContent = string.Empty;
+
         // 📝 Document property for RichTextBox binding
         public FlowDocument Document
         {
@@ -29,7 +32,7 @@ namespace SnipShottyBoard.UI
         // 📝 Properties for text content access (plain text)
         public string TextContent 
         { 
-            get => GetPlainText(); 
+            get => _cachedTextContent; 
             set 
             { 
                 SetPlainText(value);
@@ -107,6 +110,7 @@ namespace SnipShottyBoard.UI
         // 📝 Handle text changes to show/hide placeholder and trigger events
         private void NoteRichTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
+            _cachedTextContent = GetPlainText();
             UpdatePlaceholderVisibility();
             OnTextChanged?.Invoke(); // 🔔 Notify parent component
         }

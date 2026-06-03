@@ -28,7 +28,7 @@ namespace SnipShottyBoard.UI
 
         // ✅ Sprint B Phase B.1: Async lazy-loading for thumbnails
         private readonly SemaphoreSlim _loadSemaphore = new SemaphoreSlim(4, 4); // Max 4 concurrent decodes
-        private CancellationTokenSource? _pendingLoadsCts;
+        private readonly CancellationTokenSource _disposeToken = new(); // Cancelled only on Dispose — shared by all loads
 
         // 🖱️ Drag and Drop state tracking
         private bool isDragging = false;
@@ -200,11 +200,6 @@ namespace SnipShottyBoard.UI
         {
             try
             {
-                // Check cache first (Phase 4C P1.4)
-                var cached = ImageCacheManager.Instance.GetFromCache(imagePath);
-                if (cached != null)
-                    return cached;
-
                 var extension = Path.GetExtension(imagePath).ToLowerInvariant();
                 var bitmap = new BitmapImage();
                 bitmap.BeginInit();
@@ -230,9 +225,6 @@ namespace SnipShottyBoard.UI
                     bitmap.Freeze(); // Make static images thread-safe
                 }
 
-                // Add to cache (Phase 4C P1.4)
-                ImageCacheManager.Instance.AddToCache(imagePath, bitmap);
-                
                 return bitmap;
             }
             catch (Exception ex)
@@ -310,6 +302,49 @@ namespace SnipShottyBoard.UI
             hideItem.Click += (s, ev) => ToggleHiddenForAll(anyHidden);
             menu.Items.Add(hideItem);
 
+            menu.Items.Add(new Separator());
+
+            // Label toggle — apply to ALL images
+            var anyLabel = ImagePanel.Children.OfType<Grid>()
+                .Any(g => (g.Tag as MediaReference)?.ShowLabel == true);
+            var labelAllItem = new MenuItem
+            {
+                Header = "Label",
+                IsCheckable = true,
+                IsChecked = anyLabel,
+                Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.Tag)
+            };
+            labelAllItem.Click += (s, ev) => ToggleShowLabelForAll((bool)((MenuItem)s!).IsChecked!);
+            menu.Items.Add(labelAllItem);
+
+            // Date toggle — apply to ALL images
+            var anyDate = ImagePanel.Children.OfType<Grid>()
+                .Any(g => (g.Tag as MediaReference)?.ShowDate == true);
+            var dateAllItem = new MenuItem
+            {
+                Header = "Date",
+                IsCheckable = true,
+                IsChecked = anyDate,
+                Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.Calendar)
+            };
+            dateAllItem.Click += (s, ev) => ToggleShowDateForAll((bool)((MenuItem)s!).IsChecked!);
+            menu.Items.Add(dateAllItem);
+
+            // Time toggle — apply to ALL images
+            var anyTime = ImagePanel.Children.OfType<Grid>()
+                .Any(g => (g.Tag as MediaReference)?.ShowTime == true);
+            var timeAllItem = new MenuItem
+            {
+                Header = "Time",
+                IsCheckable = true,
+                IsChecked = anyTime,
+                Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.Clock)
+            };
+            timeAllItem.Click += (s, ev) => ToggleShowTimeForAll((bool)((MenuItem)s!).IsChecked!);
+            menu.Items.Add(timeAllItem);
+
+            menu.Items.Add(new Separator());
+
             // Delete All — with confirmation
             var deleteItem = new MenuItem
             {
@@ -332,6 +367,48 @@ namespace SnipShottyBoard.UI
                 {
                     mediaRef.ThumbnailSize = newSize;
                     RebuildSingleContainer(container, mediaRef);
+                }
+            }
+            OnMediaChanged?.Invoke();
+        }
+
+        private void ToggleShowLabelForAll(bool value)
+        {
+            foreach (var container in ImagePanel.Children.OfType<Grid>().ToList())
+            {
+                var mediaRef = container.Tag as MediaReference;
+                if (mediaRef != null)
+                {
+                    mediaRef.ShowLabel = value;
+                    UpdateContainerVisibility(container, mediaRef);
+                }
+            }
+            OnMediaChanged?.Invoke();
+        }
+
+        private void ToggleShowDateForAll(bool value)
+        {
+            foreach (var container in ImagePanel.Children.OfType<Grid>().ToList())
+            {
+                var mediaRef = container.Tag as MediaReference;
+                if (mediaRef != null)
+                {
+                    mediaRef.ShowDate = value;
+                    UpdateContainerVisibility(container, mediaRef);
+                }
+            }
+            OnMediaChanged?.Invoke();
+        }
+
+        private void ToggleShowTimeForAll(bool value)
+        {
+            foreach (var container in ImagePanel.Children.OfType<Grid>().ToList())
+            {
+                var mediaRef = container.Tag as MediaReference;
+                if (mediaRef != null)
+                {
+                    mediaRef.ShowTime = value;
+                    UpdateContainerVisibility(container, mediaRef);
                 }
             }
             OnMediaChanged?.Invoke();
@@ -435,82 +512,69 @@ namespace SnipShottyBoard.UI
                     container.Background = Brushes.Transparent;
             };
 
-            // Right-click context menu — apply dark theme style
-            var contextMenu = new ContextMenu();
-            if (Application.Current.Resources.Contains("NativeContextMenuStyle"))
-                contextMenu.Style = (Style)Application.Current.Resources["NativeContextMenuStyle"];
-
-            var copyItem = new MenuItem { Header = "Copy", Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.ContentCopy) };
-            copyItem.Click += (s, e) => CopyImageToClipboard(mediaRef.FullPath);
-            contextMenu.Items.Add(copyItem);
-
-            var deleteItem = new MenuItem { Header = "Delete", Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.Delete) };
-            deleteItem.Click += (s, e) => DeleteImageFromMenu(container, mediaRef);
-            contextMenu.Items.Add(deleteItem);
-
-            var sizeMenu = new MenuItem { Header = "Size", Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.Resize) };
-            var sizes = new (string Label, int Size)[]
+            // Right-click context menu — lazily built on first open (LEAK-16)
+            // Empty placeholder required for ContextMenuOpening to fire.
+            container.ContextMenu = new ContextMenu();
+            container.ContextMenuOpening += (_, _) =>
             {
-                ("Small (60px)", AppConstants.ThumbnailSizeSmall),
-                ("Medium (100px)", AppConstants.ThumbnailSizeMedium),
-                ("Big (150px)", AppConstants.ThumbnailSizeBig)
+                var menu = (ContextMenu)container.ContextMenu;
+                if (menu.Items.Count > 0) return;
+
+                if (Application.Current.Resources.Contains("NativeContextMenuStyle"))
+                    menu.Style = (Style)Application.Current.Resources["NativeContextMenuStyle"];
+
+                var copyItem = new MenuItem { Header = "Copy", Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.ContentCopy) };
+                copyItem.Click += (s, e) => CopyImageToClipboard(mediaRef.FullPath);
+                menu.Items.Add(copyItem);
+
+                var deleteItem = new MenuItem { Header = "Delete", Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.Delete) };
+                deleteItem.Click += (s, e) => DeleteImageFromMenu(container, mediaRef);
+                menu.Items.Add(deleteItem);
+
+                var sizeMenu = new MenuItem { Header = "Size", Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.Resize) };
+                var sizes = new (string Label, int Size)[]
+                {
+                    ("Small (60px)", AppConstants.ThumbnailSizeSmall),
+                    ("Medium (100px)", AppConstants.ThumbnailSizeMedium),
+                    ("Big (150px)", AppConstants.ThumbnailSizeBig)
+                };
+                foreach (var (label, size) in sizes)
+                {
+                    var sizeItem = new MenuItem { Header = label, IsCheckable = true, IsChecked = mediaRef.ThumbnailSize == size };
+                    var capturedSize = size;
+                    sizeItem.Click += (s, e) => ChangeThumbnailSize(container, mediaRef, capturedSize);
+                    sizeMenu.Items.Add(sizeItem);
+                }
+                menu.Items.Add(sizeMenu);
+
+                var hideItem = new MenuItem
+                {
+                    Header = mediaRef.IsHidden ? "Show" : "Hide",
+                    Icon = CreateIcon(mediaRef.IsHidden ? MaterialDesignThemes.Wpf.PackIconKind.Eye : MaterialDesignThemes.Wpf.PackIconKind.EyeOff)
+                };
+                hideItem.Click += (s, e) => ToggleHidden(container, mediaRef);
+                menu.Items.Add(hideItem);
+
+                menu.Items.Add(new Separator());
+
+                var labelItem = new MenuItem { Header = "Label", IsCheckable = true, IsChecked = mediaRef.ShowLabel };
+                labelItem.Click += (s, e) => ToggleMediaBool((MenuItem)s!, container, mediaRef, m => m.ShowLabel = (bool)((MenuItem)s!).IsChecked!);
+                menu.Items.Add(labelItem);
+
+                var dateItem = new MenuItem { Header = "Date", IsCheckable = true, IsChecked = mediaRef.ShowDate };
+                dateItem.Click += (s, e) => ToggleMediaBool((MenuItem)s!, container, mediaRef, m => m.ShowDate = (bool)((MenuItem)s!).IsChecked!);
+                menu.Items.Add(dateItem);
+
+                var timeItem = new MenuItem { Header = "Time", IsCheckable = true, IsChecked = mediaRef.ShowTime };
+                timeItem.Click += (s, e) => ToggleMediaBool((MenuItem)s!, container, mediaRef, m => m.ShowTime = (bool)((MenuItem)s!).IsChecked!);
+                menu.Items.Add(timeItem);
+
+                menu.Items.Add(new Separator());
+
+                var renameItem = new MenuItem { Header = "Rename...", Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.Edit) };
+                renameItem.Click += (s, e) => EditLabel(container, mediaRef);
+                menu.Items.Add(renameItem);
             };
-            foreach (var (label, size) in sizes)
-            {
-                var sizeItem = new MenuItem { Header = label, IsCheckable = true, IsChecked = mediaRef.ThumbnailSize == size };
-                var capturedSize = size;
-                sizeItem.Click += (s, e) => ChangeThumbnailSize(container, mediaRef, capturedSize);
-                sizeMenu.Items.Add(sizeItem);
-            }
-            contextMenu.Items.Add(sizeMenu);
-
-            var hideItem = new MenuItem
-            {
-                Header = mediaRef.IsHidden ? "Show" : "Hide",
-                Icon = CreateIcon(mediaRef.IsHidden ? MaterialDesignThemes.Wpf.PackIconKind.Eye : MaterialDesignThemes.Wpf.PackIconKind.EyeOff)
-            };
-            hideItem.Click += (s, e) => ToggleHidden(container, mediaRef);
-            contextMenu.Items.Add(hideItem);
-
-            contextMenu.Items.Add(new Separator());
-
-            // Label toggle — static header + checkmark
-            var labelItem = new MenuItem
-            {
-                Header = "Label",
-                IsCheckable = true,
-                IsChecked = mediaRef.ShowLabel
-            };
-            labelItem.Click += (s, e) => ToggleMediaBool((MenuItem)s!, container, mediaRef, m => m.ShowLabel = (bool)((MenuItem)s!).IsChecked!);
-            contextMenu.Items.Add(labelItem);
-
-            // Date toggle — static header + checkmark
-            var dateItem = new MenuItem
-            {
-                Header = "Date",
-                IsCheckable = true,
-                IsChecked = mediaRef.ShowDate
-            };
-            dateItem.Click += (s, e) => ToggleMediaBool((MenuItem)s!, container, mediaRef, m => m.ShowDate = (bool)((MenuItem)s!).IsChecked!);
-            contextMenu.Items.Add(dateItem);
-
-            // Time toggle — static header + checkmark
-            var timeItem = new MenuItem
-            {
-                Header = "Time",
-                IsCheckable = true,
-                IsChecked = mediaRef.ShowTime
-            };
-            timeItem.Click += (s, e) => ToggleMediaBool((MenuItem)s!, container, mediaRef, m => m.ShowTime = (bool)((MenuItem)s!).IsChecked!);
-            contextMenu.Items.Add(timeItem);
-
-            contextMenu.Items.Add(new Separator());
-
-            var renameItem = new MenuItem { Header = "Rename...", Icon = CreateIcon(MaterialDesignThemes.Wpf.PackIconKind.Edit) };
-            renameItem.Click += (s, e) => EditLabel(container, mediaRef);
-            contextMenu.Items.Add(renameItem);
-
-            container.ContextMenu = contextMenu;
 
             // Double-click on label row to edit
             container.MouseLeftButtonDown += (s, e) =>
@@ -770,9 +834,9 @@ namespace SnipShottyBoard.UI
         /// Asynchronously loads a thumbnail and replaces the placeholder in the container.
         /// Limited to 4 concurrent decodes via _loadSemaphore.
         /// </summary>
-        private async Task LoadThumbnailAsync(Grid container, string imagePath, DateTime? timestamp, MediaReference? mediaRef = null)
+        private async Task LoadThumbnailAsync(Grid container, string imagePath, DateTime? timestamp, MediaReference? mediaRef = null, CancellationToken cancellationToken = default)
         {
-            await _loadSemaphore.WaitAsync();
+            await _loadSemaphore.WaitAsync(cancellationToken);
 
             try
             {
@@ -794,7 +858,7 @@ namespace SnipShottyBoard.UI
                         bitmap = CreateStaticGifThumbnail(imagePath);
                     else
                         bitmap = CreateThumbnailBitmap(imagePath);
-                });
+                }, cancellationToken);
 
                 if (bitmap == null)
                     return;
@@ -894,11 +958,9 @@ namespace SnipShottyBoard.UI
         /// </summary>
         private void EnsureThumbnailLoaded(Grid container, string imagePath, DateTime? timestamp, MediaReference? mediaRef = null)
         {
-            _pendingLoadsCts?.Cancel();
-            _pendingLoadsCts = new CancellationTokenSource();
-
-            // Fire and forget — the method handles its own errors
-            _ = Task.Run(() => LoadThumbnailAsync(container, imagePath, timestamp, mediaRef));
+            // Use the shared dispose token — all thumbnail loads for this section share one
+            // lifetime and are cancelled together only when the section is disposed.
+            _ = Task.Run(() => LoadThumbnailAsync(container, imagePath, timestamp, mediaRef, _disposeToken.Token));
         }
 
         // 📦 Create image container with 3-row layout and drag support
@@ -1069,7 +1131,6 @@ namespace SnipShottyBoard.UI
             if (clickTimer != null)
             {
                 clickTimer.Stop();
-                clickTimer.Tick -= OnClickTimerTick; // Prevent memory leaks
             }
             pendingClickContainer = null;
             pendingClickImagePath = null;
@@ -1089,15 +1150,14 @@ namespace SnipShottyBoard.UI
                     clickTimer = null;
                 }
 
-                // ✅ Sprint B B.1: Cancel pending thumbnail loads
-                _pendingLoadsCts?.Cancel();
-                _pendingLoadsCts?.Dispose();
-                _pendingLoadsCts = null;
+                // Cancel all pending thumbnail loads for this section
+                _disposeToken.Cancel();
+                _disposeToken.Dispose();
                 _loadSemaphore?.Dispose();
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error disposing MediaSection: {ex.Message}");
+                LoggingService.LogErrorStatic("Error disposing MediaSection", ex, "UI");
             }
         }
 
@@ -1315,15 +1375,18 @@ namespace SnipShottyBoard.UI
             {
                 ImagePanel.Children.Insert(insertPosition, insertionIndicator);
                 dropTargetIndex = index;
-                
+#if DEBUG
                 System.Diagnostics.Debug.WriteLine($"Insertion indicator placed at UI position {insertPosition}, data index {index}");
+#endif
             }
             catch (ArgumentOutOfRangeException)
             {
                 // Fallback: add at end
                 ImagePanel.Children.Add(insertionIndicator);
                 dropTargetIndex = actualContainers.Count;
+#if DEBUG
                 System.Diagnostics.Debug.WriteLine($"Fallback: Insertion indicator added at end");
+#endif
             }
         }
 
@@ -1351,8 +1414,9 @@ namespace SnipShottyBoard.UI
                 targetDataIndex = Math.Min(targetDataIndex, imageFiles.Count - 1);
             }
 
+#if DEBUG
             System.Diagnostics.Debug.WriteLine($"Target calculation: dropIndex={dropTargetIndex}, originalIndex={originalDataIndex}, targetDataIndex={targetDataIndex}");
-            
+#endif
             return Math.Max(0, Math.Min(targetDataIndex, imageFiles.Count - 1));
         }
 
@@ -1372,7 +1436,9 @@ namespace SnipShottyBoard.UI
             var targetIndex = GetInsertionIndex(panelPosition);
             if (targetIndex != dropTargetIndex)
             {
+#if DEBUG
                 System.Diagnostics.Debug.WriteLine($"Drag move: targetIndex={targetIndex}, dropTargetIndex={dropTargetIndex}, panelPos=({panelPosition.X:F1}, {panelPosition.Y:F1})");
+#endif
                 ShowInsertionIndicator(targetIndex);
             }
         }
@@ -1420,7 +1486,9 @@ namespace SnipShottyBoard.UI
         {
             if (fromDataIndex < 0 || toDataIndex < 0 || fromDataIndex >= imageFiles.Count)
             {
+#if DEBUG
                 System.Diagnostics.Debug.WriteLine($"Invalid reorder indices: from={fromDataIndex}, to={toDataIndex}, count={imageFiles.Count}");
+#endif
                 return;
             }
 
@@ -1429,11 +1497,15 @@ namespace SnipShottyBoard.UI
 
             if (fromDataIndex == toDataIndex)
             {
+#if DEBUG
                 System.Diagnostics.Debug.WriteLine("No reordering needed - same position");
+#endif
                 return;
             }
 
+#if DEBUG
             System.Diagnostics.Debug.WriteLine($"Reordering image: from={fromDataIndex} to={toDataIndex}");
+#endif
 
             try
             {
@@ -1447,23 +1519,42 @@ namespace SnipShottyBoard.UI
 
                 // 🔔 Trigger change notification
                 OnMediaChanged?.Invoke();
-
+#if DEBUG
                 System.Diagnostics.Debug.WriteLine("Reordering completed successfully");
+#endif
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error during reordering: {ex.Message}");
+                LoggingService.LogErrorStatic("Error during image reordering", ex, "UI");
                 // Try to recover by rebuilding UI
                 RebuildUIFromData();
             }
         }
 
         // 🏗️ Rebuild UI to match data order — uses lazy async loading (Sprint B B.1)
+        // ✅ Preserves v3 metadata (Label, ThumbnailSize, IsHidden, ShowLabel, ShowDate, ShowTime)
         private void RebuildUIFromData()
         {
+            CancelClickDetection(); // Clear stale container ref before rebuild
+
             // Store current dragged container reference
             var wasDragging = isDragging;
             var draggedPath = draggedImagePath;
+
+            // Collect existing v3 metadata from containers BEFORE clearing
+            var existingRefs = new Dictionary<string, MediaReference>();
+            foreach (var container in ImagePanel.Children.OfType<Grid>())
+            {
+                if (ReferenceEquals(container, insertionIndicator))
+                    continue;
+                var refData = container.Tag as MediaReference;
+                if (refData != null)
+                {
+                    var fullPath = refData.FullPath;
+                    if (!string.IsNullOrEmpty(fullPath))
+                        existingRefs[fullPath] = refData;
+                }
+            }
 
             // Clear UI (but keep drag canvas and insertion indicator logic intact)
             var containersToRemove = ImagePanel.Children
@@ -1476,7 +1567,7 @@ namespace SnipShottyBoard.UI
                 ImagePanel.Children.Remove(container);
             }
 
-            // Rebuild from data order — placeholders first, async load after
+            // Rebuild from data order — reuse existing refs to preserve v3 metadata
             foreach (var imagePath in imageFiles)
             {
                 try
@@ -1485,13 +1576,21 @@ namespace SnipShottyBoard.UI
                     if (!DataManager.ValidateImageFile(imagePath))
                         continue;
 
-                    // Build MediaReference from current data (preserves v3 metadata)
+                    // Reuse existing MediaReference (preserves v3 metadata) or create new
                     var timestamp = imageTimestamps.TryGetValue(imagePath, out var ts) ? ts : DateTime.Now;
-                    var mediaRef = new MediaReference
+                    MediaReference mediaRef;
+                    if (existingRefs.TryGetValue(imagePath, out var existingRef))
                     {
-                        Filename = Path.GetFileName(imagePath),
-                        DateAdded = timestamp
-                    };
+                        mediaRef = existingRef;
+                    }
+                    else
+                    {
+                        mediaRef = new MediaReference
+                        {
+                            Filename = Path.GetFileName(imagePath),
+                            DateAdded = timestamp
+                        };
+                    }
 
                     // 📦 Add placeholder container (instant, no decode)
                     var container = CreatePlaceholderContainer(imagePath, mediaRef);
@@ -1645,35 +1744,56 @@ namespace SnipShottyBoard.UI
         {
             try
             {
+#if DEBUG
                 System.Diagnostics.Debug.WriteLine($"🖼️ ===== MEDIASECTION OPENING IMAGE VIEWER =====");
                 System.Diagnostics.Debug.WriteLine($"🖼️ MediaSection.ShowFullSizeImage() called");
                 System.Diagnostics.Debug.WriteLine($"🖼️ Opening ImageViewer for: {imagePath}");
-                
+#endif
                 var extension = Path.GetExtension(imagePath).ToLowerInvariant();
+#if DEBUG
                 System.Diagnostics.Debug.WriteLine($"🖼️ File extension: {extension}");
-                
+
                 if (extension == ".gif")
                 {
                     System.Diagnostics.Debug.WriteLine($"🎬 MEDIASECTION: This is a GIF file - animation should be preserved");
                     System.Diagnostics.Debug.WriteLine($"🎬 MEDIASECTION: About to create ImageViewerWindow for GIF");
                 }
-                
+#endif
                 // Read image paths directly from what's rendered in the UI (eliminates ghost paths)
                 var validImages = ImagePanel.Children
                     .OfType<Grid>()
                     .Select(container => (container.Tag as MediaReference)?.FullPath)
                     .Where(path => !string.IsNullOrEmpty(path))
+                    .Select(path => path!)
                     .ToList();
 
                 // Find clicked image position within visible thumbnails
                 var currentIndex = validImages.IndexOf(imagePath);
+#if DEBUG
                 System.Diagnostics.Debug.WriteLine($"🖼️ Current image index: {currentIndex} of {validImages.Count} visible images");
+#endif
+
+                // Reuse existing viewer for this path instead of opening a duplicate
+                var existingViewer = Application.Current.Windows
+                    .OfType<ImageViewerWindow>()
+                    .FirstOrDefault(w => w.CurrentImagePath == imagePath);
+
+                if (existingViewer != null)
+                {
+                    existingViewer.WindowState = System.Windows.WindowState.Normal;
+                    existingViewer.Activate();
+                    existingViewer.Focus();
+                    return;
+                }
 
                 // 🔗 Create viewer with clean navigation list (only displayed thumbnails)
+#if DEBUG
                 System.Diagnostics.Debug.WriteLine($"🖼️ Creating ImageViewerWindow...");
+#endif
                 var imageViewer = new ImageViewerWindow(imagePath, validImages, currentIndex, RemoveImageByPath);
+#if DEBUG
                 System.Diagnostics.Debug.WriteLine($"🖼️ ImageViewerWindow created successfully");
-                
+#endif
                 // 🎯 Position window to not cover the main app
                 var mainWindow = Application.Current.MainWindow;
                 if (mainWindow != null)
@@ -1689,19 +1809,23 @@ namespace SnipShottyBoard.UI
                     }
                 }
 
+#if DEBUG
                 System.Diagnostics.Debug.WriteLine($"🖼️ About to show ImageViewerWindow...");
+#endif
                 imageViewer.Show();
+#if DEBUG
                 System.Diagnostics.Debug.WriteLine($"🖼️ ImageViewerWindow.Show() completed");
-                
+
                 if (extension == ".gif")
                 {
                     System.Diagnostics.Debug.WriteLine($"🎬 MEDIASECTION: GIF should now be visible and animating in ImageViewerWindow");
                 }
                 System.Diagnostics.Debug.WriteLine($"🖼️ ===== MEDIASECTION OPENING COMPLETE =====");
+#endif
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Failed to open ImageViewer: {ex.Message}");
+                LoggingService.LogErrorStatic("Failed to open image viewer", ex, "UI");
                 // 🔔 Show proper error dialog using our custom dialog system
                 CustomDialog.ShowError(
                     Application.Current.MainWindow,
@@ -1726,12 +1850,14 @@ namespace SnipShottyBoard.UI
                     
                     // 🗑️ Instant UI removal
                     RemoveImageContainer(containerToRemove, imagePath);
+#if DEBUG
                     System.Diagnostics.Debug.WriteLine($"✅ Instantly removed: {imagePath}");
+#endif
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error removing image: {ex.Message}");
+                LoggingService.LogErrorStatic("Error removing image", ex, "UI");
             }
         }
         
@@ -1836,7 +1962,7 @@ namespace SnipShottyBoard.UI
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error handling dropped files: {ex.Message}");
+                LoggingService.LogErrorStatic("Error handling dropped files", ex, "UI");
             }
         }
         
@@ -1891,7 +2017,9 @@ namespace SnipShottyBoard.UI
                             var destinationPath = DataManager.CopyDroppedImage(sourcePath);
                             if (destinationPath == null)
                             {
+#if DEBUG
                                 System.Diagnostics.Debug.WriteLine($"❌ UI: Failed to copy dropped image: {sourcePath}");
+#endif
                                 return;
                             }
                             
@@ -1905,7 +2033,9 @@ namespace SnipShottyBoard.UI
                                     var bitmap = CreateThumbnailBitmap(destinationPath);
                                     if (bitmap == null)
                                     {
+#if DEBUG
                                         System.Diagnostics.Debug.WriteLine($"❌ Failed to create thumbnail for dropped image: {newFileName}");
+#endif
                                         return;
                                     }
 
@@ -1920,25 +2050,26 @@ namespace SnipShottyBoard.UI
 
                                     // 📝 Add to MediaSection
                                     AddImage(image, destinationPath, DateTime.Now);
-                                    
+#if DEBUG
                                     System.Diagnostics.Debug.WriteLine($"✅ Added dropped image: {newFileName}");
+#endif
                                 }
                                 catch (Exception ex)
                                 {
-                                    System.Diagnostics.Debug.WriteLine($"❌ Error adding dropped image to UI: {ex.Message}");
+                                    LoggingService.LogErrorStatic("Error adding dropped image to UI", ex, "UI");
                                 }
                             });
                         }
                         catch (Exception ex)
                         {
-                            System.Diagnostics.Debug.WriteLine($"❌ Error copying dropped file: {ex.Message}");
+                            LoggingService.LogErrorStatic("Error copying dropped file", ex, "UI");
                         }
                     });
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error processing dropped images: {ex.Message}");
+                LoggingService.LogErrorStatic("Error processing dropped images", ex, "UI");
             }
         }
         

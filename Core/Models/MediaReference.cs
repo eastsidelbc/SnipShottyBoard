@@ -42,7 +42,7 @@ namespace SnipShottyBoard.Core.Models
         /// <summary>
         /// Show/hide the label row beneath the image.
         /// </summary>
-        public bool ShowLabel { get; set; } = false;
+        public bool ShowLabel { get; set; } = true;
 
         /// <summary>
         /// Show/hide the date portion of the timestamp row.
@@ -54,18 +54,13 @@ namespace SnipShottyBoard.Core.Models
         /// </summary>
         public bool ShowTime { get; set; } = true;
 
+        private static readonly string _imagesFolder = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "SnipShottyBoard", "images");
+
         /// <summary>
         /// Resolves the full path to the media file.
         /// </summary>
-        public string FullPath
-        {
-            get
-            {
-                var imagesFolder = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "SnipShottyBoard", "images");
-                return Path.Combine(imagesFolder, Filename);
-            }
-        }
+        public string FullPath => Path.Combine(_imagesFolder, Filename);
     }
 }

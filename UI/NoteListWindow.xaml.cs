@@ -7,6 +7,7 @@ using System.Windows.Input;
 using SnipShottyBoard.Core.Managers;
 using SnipShottyBoard.Core.Utils;
 using SnipShottyBoard.Data;
+using SnipShottyBoard.Infrastructure.Logging;
 using SnipShottyBoard.UI.Views;
 
 namespace SnipShottyBoard.UI
@@ -17,14 +18,11 @@ namespace SnipShottyBoard.UI
     public partial class NoteListWindow : Wpf.Ui.Controls.FluentWindow
     {
         private readonly NoteWindowManager noteManager;
-        
-        // 💾 Track position trackers for secondary windows (for cleanup)
-        private readonly Dictionary<Guid, WindowPositionTracker> _positionTrackers 
-            = new Dictionary<Guid, WindowPositionTracker>();
 
         public NoteListWindow()
         {
             InitializeComponent();
+            WindowChromeFix.Apply(this);
             noteManager = NoteWindowManager.Instance;
             SetupEvents();
             RefreshNoteWindowsList();
@@ -253,7 +251,7 @@ namespace SnipShottyBoard.UI
                 // 🔍 Check if window is already open
                 foreach (Window window in Application.Current.Windows)
                 {
-                    if (window is MainWindow mainWindow && mainWindow.Tag?.ToString() == windowId.ToString())
+                    if (window is MainWindow mainWindow && mainWindow.WindowId == windowId)
                     {
                         // Window already open, just bring it to front
                         window.Activate();
@@ -264,7 +262,6 @@ namespace SnipShottyBoard.UI
 
                 // 🆕 Create new MainWindow for this note window with its specific data
                 var noteWindow = new MainWindow(windowData);
-                noteWindow.Tag = windowId.ToString(); // Store window ID for identification
                 noteWindow.Title = windowData.Title;
                 
                 // 📍 Set window position and size
@@ -275,37 +272,10 @@ namespace SnipShottyBoard.UI
                 
                 noteWindow.Show();
                 noteWindow.Activate();
-
-                // 💾 Set up debounced position tracking (prevents choppy dragging from disk I/O)
-                var tracker = new WindowPositionTracker(noteWindow, () =>
-                {
-                    // This callback runs only after drag/resize stops (debounced)
-                    windowData.WindowLeft = noteWindow.Left;
-                    windowData.WindowTop = noteWindow.Top;
-                    windowData.WindowWidth = noteWindow.ActualWidth;
-                    windowData.WindowHeight = noteWindow.ActualHeight;
-                    
-                    noteManager.SaveNoteWindows();
-                });
-                
-                // Store tracker for cleanup
-                _positionTrackers[windowId] = tracker;
-                
-                // Clean up tracker when window closes
-                noteWindow.Closing += (s, e) =>
-                {
-                    if (_positionTrackers.ContainsKey(windowId))
-                    {
-                        var windowTracker = _positionTrackers[windowId];
-                        windowTracker.SaveNow(); // Save immediately before disposing
-                        windowTracker.Dispose();
-                        _positionTrackers.Remove(windowId);
-                    }
-                };
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error opening note window: {ex.Message}");
+                LoggingService.LogErrorStatic("Failed to open note window", ex, "UI");
                 MessageBox.Show($"Error opening note window: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -330,7 +300,7 @@ namespace SnipShottyBoard.UI
                 // 📝 Update the actual window title if it's open
                 foreach (Window window in Application.Current.Windows)
                 {
-                    if (window is MainWindow mainWindow && mainWindow.Tag?.ToString() == windowId.ToString())
+                    if (window is MainWindow mainWindow && mainWindow.WindowId == windowId)
                     {
                         mainWindow.Title = windowData.Title;
                         break;
@@ -346,7 +316,7 @@ namespace SnipShottyBoard.UI
                 // 🗑️ Close the actual window if it's open
                 foreach (Window window in Application.Current.Windows.Cast<Window>().ToList())
                 {
-                    if (window is MainWindow mainWindow && mainWindow.Tag?.ToString() == windowId.ToString())
+                    if (window is MainWindow mainWindow && mainWindow.WindowId == windowId)
                     {
                         window.Close();
                         break;
@@ -358,7 +328,7 @@ namespace SnipShottyBoard.UI
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error closing note window: {ex.Message}");
+                LoggingService.LogErrorStatic("Failed to close note window", ex, "UI");
             }
         }
 

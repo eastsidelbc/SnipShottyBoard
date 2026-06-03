@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using SnipShottyBoard.Core.Models;
+using SnipShottyBoard.Core.Utils;
 using SnipShottyBoard.Data;
 
 namespace SnipShottyBoard.UI.Views
@@ -29,6 +30,7 @@ namespace SnipShottyBoard.UI.Views
             try
             {
                 InitializeComponent();
+                WindowChromeFix.Apply(this);
                 
                 // 🔄 Clone settings so we can work with a copy
                 originalSettings = currentSettings;
@@ -181,7 +183,7 @@ namespace SnipShottyBoard.UI.Views
             try
             {
                 currentActiveTab = tabButton;
-                tabButton.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(51, 255, 255, 255)); // 20% white
+                tabButton.Background = (System.Windows.Media.SolidColorBrush)Application.Current.FindResource("SettingsActiveTabBrush");
                 tabButton.FontWeight = FontWeights.SemiBold;
             }
             catch (Exception ex)

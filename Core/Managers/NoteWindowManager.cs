@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using SnipShottyBoard.Core.Models;
 using SnipShottyBoard.Data;
+using SnipShottyBoard.Infrastructure.Logging;
 
 namespace SnipShottyBoard.Core.Managers
 {
@@ -18,6 +19,8 @@ namespace SnipShottyBoard.Core.Managers
         public ObservableCollection<NoteWindowData> NoteWindows { get; }
         public event Action<NoteWindowData>? WindowCreated;
         public event Action<NoteWindowData>? WindowClosed;
+
+        private AppSettings? _cachedSettings;
 
         private NoteWindowManager()
         {
@@ -60,13 +63,16 @@ namespace SnipShottyBoard.Core.Managers
         {
             try
             {
-                var master = DataManager.LoadMasterData();
-                master.Windows = NoteWindows.ToList();
+                var master = new MasterData
+                {
+                    Windows = NoteWindows.ToList(),
+                    Settings = _cachedSettings ?? new AppSettings()
+                };
                 DataManager.SaveMasterData(master);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Data: Error saving note windows: {ex.Message}");
+                LoggingService.LogErrorStatic($"Error saving note windows: {ex.Message}", ex, "Data");
             }
         }
 
@@ -76,6 +82,7 @@ namespace SnipShottyBoard.Core.Managers
             try
             {
                 var master = DataManager.LoadMasterData();
+                _cachedSettings = master.Settings;
                 var windows = master.Windows ?? new List<NoteWindowData>();
 
                 foreach (var window in windows.Where(w => w.IsActive))
@@ -84,11 +91,11 @@ namespace SnipShottyBoard.Core.Managers
                 }
 
                 // Don't create default window automatically - let the main window handle existing data first
-                System.Diagnostics.Debug.WriteLine($"📥 Data: Loaded {NoteWindows.Count} note windows from master.json");
+                LoggingService.LogDebugStatic($"Loaded {NoteWindows.Count} note windows from master.json", "Data");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Data: Error loading note windows: {ex.Message}");
+                LoggingService.LogErrorStatic($"Error loading note windows: {ex.Message}", ex, "Data");
                 // Don't create default window on error either
             }
         }
@@ -117,6 +124,16 @@ namespace SnipShottyBoard.Core.Managers
         public DateTime CreatedAt { get; set; }
         public DateTime LastModified { get; set; }
         public bool IsActive { get; set; }
+
+        /// <summary>
+        /// 🪟 Windows-Sticky-Notes-style "was this window open at last shutdown?"
+        /// Defaults to true so existing data restores cleanly on first launch
+        /// after the multi-window-restore fix. Set to false only when the user
+        /// explicitly closes ONE window while others remain open. Last window
+        /// closing the whole app preserves IsOpen=true so it reopens next launch.
+        /// </summary>
+        public bool IsOpen { get; set; } = true;
+
         public double WindowLeft { get; set; } = AppConstants.DefaultWindowLeft;
         public double WindowTop { get; set; } = AppConstants.DefaultWindowTop;
         public double WindowWidth { get; set; } = AppConstants.DefaultWindowWidth;

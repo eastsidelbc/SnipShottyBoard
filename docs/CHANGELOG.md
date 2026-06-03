@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🔒 Fixed
+- **B-LABELSIZE — Per-image customization lost on every restart**: `SavedNote` had two `[Obsolete]` legacy accessors (`ImageFiles`, `ImageTimestamps`) that `System.Text.Json` still round-tripped. On load, the `imageFiles` setter ran `Media.Clear()` and recreated `MediaReference` objects with default v3 values, wiping every user-set Label, ThumbnailSize, ShowLabel, ShowDate, ShowTime, and IsHidden. Fixed by adding `[JsonIgnore]` to both legacy properties. Also fixed `TabManager.GetSaveData()` losing `DataVersion` and `TabOrder` on every save. ([Dev Note](docs/devnotes/2026-06-03-bug-label-size-multiwindow-restore.md))
+- **B-MULTIWIN — Only first window reopened at startup**: `App.xaml` used `StartupUri` to create exactly one `MainWindow`, and `MainWindow_Closing` never updated state to distinguish per-window close from app exit. Replaced with explicit `RestoreOpenWindows()` in `App.OnStartup` that opens every window flagged `IsOpen=true` at last shutdown (Windows Sticky Notes app behavior). New `IsOpen` field on `NoteWindowData` is flipped to false only when closing a window while others are still open; the last window preserves its `IsOpen=true` for next launch. ([Dev Note](docs/devnotes/2026-06-03-bug-label-size-multiwindow-restore.md))
+
 ### ✨ Added
 - **Tab Rename — Edit Mode Visuals**: Double-click tab rename now shows accent-colored border (AccentBrush), indigo glow (AccentGlowEffect), gradient underline, and accent caret. Uses existing tab template elements (TabBorder, ActiveUnderline) for consistent design language. ([Dev Note](docs/devnotes/2026-05-05-sprint-ui5-tab-rename-media-menu.md))
 - **MediaSection — Global Context Menu**: Right-click empty space in media section to apply bulk operations: Size (Small/Medium/Big for all), Hide All / Show All toggle, Delete All (with confirmation). Right-click on individual images still shows per-image menu. ([Dev Note](docs/devnotes/2026-05-05-sprint-ui5-tab-rename-media-menu.md))
@@ -113,6 +117,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Data Architecture**: Single-file persistence reduces I/O complexity and corruption risk
 - **Memory Management**: LRU cache + lazy-loading + static GIF thumbnails = smooth performance with 50+ images
 - **Theme System**: All colors centralized in DarkTheme.xaml / LightTheme.xaml — no hardcoded values
+
+### 🧹 Hygiene
+- **HYGIENE-1 — Production cleanup**: Debug gate (`debugImageLogging` behind `#if DEBUG`), double WindowPositionTracker removed, AssemblyVersion synced to 1.7.0, dead migration code deleted. ([Dev Note](docs/devnotes/2026-05-19-sprint-hygiene-1-issue1-debug-gate.md))
+- **HYGIENE-2 — Serilog logging level gate**: `MinimumLevel.Debug()` now gated behind `#if DEBUG`; Release builds use `Information`. ([Dev Note](docs/devnotes/2026-05-19-sprint-hygiene-2-logging-level.md))
+- **HYGIENE-3 — Memory leak fixes**: Removed blocking `GC.Collect()`/`GC.WaitForPendingFinalizers()` from ImageViewerWindow close path (frozen UI on close). Extracted MainWindow `OnThemeChanged` lambda to named method + proper unsubscribe in `Closing` event. ([Dev Note](docs/devnotes/2026-05-19-sprint-hygiene-3-memory-leaks.md))
 
 ---
 

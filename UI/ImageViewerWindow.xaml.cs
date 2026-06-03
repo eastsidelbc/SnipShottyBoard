@@ -11,6 +11,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using WpfAnimatedGif;
+using SnipShottyBoard.Core.Utils;
 using SnipShottyBoard.Infrastructure.Logging;
 
 namespace SnipShottyBoard.UI
@@ -26,6 +27,8 @@ namespace SnipShottyBoard.UI
         private BitmapImage currentImage;
         private Action<string> onImageDeleted;
 
+        public string CurrentImagePath => currentImagePath;
+
         // 🖼️ Navigation support
         private List<string> allImagePaths;
         private int currentImageIndex;
@@ -40,9 +43,14 @@ namespace SnipShottyBoard.UI
         private bool _isMouseDragging = false;
         private double _panStartScrollH;
         private double _panStartScrollV;
+        private DispatcherTimer? _gifStatusTimer;
 
-        // 🐛 Debug image logging (Sprint D.1a)
+        // 🐛 Debug image logging (Sprint D.1a) — off in Release builds
+#if DEBUG
         private static bool debugImageLogging = true;
+#else
+        private static bool debugImageLogging = false;
+#endif
         private int imageLoadSession = 0;
 
         // 🛑 Cancel stale loads on rapid navigation
@@ -51,6 +59,7 @@ namespace SnipShottyBoard.UI
         public ImageViewerWindow()
         {
             InitializeComponent();
+            WindowChromeFix.Apply(this, "ContentCardBrush");
             SetupWindow();
         }
 
@@ -72,16 +81,6 @@ namespace SnipShottyBoard.UI
             this.allImagePaths = allImagePaths ?? new List<string>();
             this.currentImageIndex = currentIndex;
             LoadImage(imagePath);
-        }
-
-        protected override void OnSourceInitialized(EventArgs e)
-        {
-            base.OnSourceInitialized(e);
-            var source = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
-            if (source?.CompositionTarget != null)
-            {
-                source.CompositionTarget.BackgroundColor = System.Windows.Media.Color.FromRgb(0x18, 0x18, 0x1B);
-            }
         }
 
         // 🔧 Setup window properties and behavior
@@ -131,10 +130,16 @@ namespace SnipShottyBoard.UI
         private void ClearPreviousImage()
         {
             if (string.IsNullOrEmpty(currentImagePath)) return;
-            try { ImageBehavior.SetAnimatedSource(DisplayImage, null); } catch { /* no prior GIF */ }
+            try
+            {
+                var ctrl = ImageBehavior.GetAnimationController(DisplayImage);
+                ctrl?.Dispose(); // releases BitmapDecoder + all decoded GIF frame buffers
+                ImageBehavior.SetAnimatedSource(DisplayImage, null);
+            }
+            catch { /* no prior GIF */ }
             DisplayImage.Source = null;
             currentImage = null;
-            ImageCacheManager.Instance.RemoveAllForPath(currentImagePath);
+            ImageCacheManager.Instance.RemoveFromCache(currentImagePath + FullResCacheSuffix);
             currentZoomLevel = 1.0;
             _isInFitMode = false;
         }
@@ -153,6 +158,7 @@ namespace SnipShottyBoard.UI
                 imageLoadSession++;
                 currentImagePath = imagePath;
                 isGifPaused = false;
+                UpdateNavigationButtons();
                 LogImage("📥 LoadImage START");
 
                 if (!File.Exists(imagePath))
@@ -165,7 +171,7 @@ namespace SnipShottyBoard.UI
                 LogImage($"Format detected: {extension}");
 
                 if (extension == ".gif")
-                    LoadGifAsync(imagePath);
+                    LoadGif(imagePath);
                 else
                     LoadStaticAsync(imagePath);
             }
@@ -221,41 +227,50 @@ namespace SnipShottyBoard.UI
             });
         }
 
-        private void LoadGifAsync(string imagePath)
+        private async void LoadGif(string imagePath)
         {
-            LogImage("🎞️ Creating GIF BitmapImage (OnDemand cache)");
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = BitmapCacheOption.OnDemand;
-            bitmap.CreateOptions = BitmapCreateOptions.None;
-            bitmap.UriSource = new Uri(imagePath, UriKind.Absolute);
-            bitmap.EndInit();
-
-            currentImagePath = imagePath;
-            LogImage($"BitmapImage created, size={bitmap.PixelWidth}x{bitmap.PixelHeight}");
-
-            RenderOptions.SetBitmapScalingMode(DisplayImage, BitmapScalingMode.Unspecified);
-            DisplayImage.SnapsToDevicePixels = false;
-            DisplayImage.UseLayoutRounding = false;
-
-            try { ImageBehavior.SetAnimatedSource(DisplayImage, null); } catch { /* safe */ }
             try
             {
+                // Read file bytes on background thread — keeps UI responsive on large GIFs
+                byte[] gifBytes = await Task.Run(() => File.ReadAllBytes(imagePath));
+
+                // If the user navigated away while we were loading, discard
+                if (currentImagePath != imagePath) return;
+
+                // Create BitmapImage from memory stream on UI thread (required by WPF)
+                var ms = new MemoryStream(gifBytes);
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnDemand; // frames decoded on demand during playback
+                bitmap.CreateOptions = BitmapCreateOptions.None;
+                bitmap.StreamSource = ms;
+                bitmap.EndInit();
+                // Do NOT freeze — GIF animation requires mutable bitmap
+
+                currentImagePath = imagePath;
+                currentImage = bitmap;
+                LogImage($"BitmapImage created, size={bitmap.PixelWidth}x{bitmap.PixelHeight}");
+
+                RenderOptions.SetBitmapScalingMode(DisplayImage, BitmapScalingMode.Unspecified);
+                DisplayImage.SnapsToDevicePixels = false;
+                DisplayImage.UseLayoutRounding = false;
+
+                try { ImageBehavior.SetAnimatedSource(DisplayImage, null); } catch { /* safe */ }
                 ImageBehavior.SetAnimatedSource(DisplayImage, bitmap);
                 LogImage("✅ SetAnimatedSource complete");
+
+                var fileName = Path.GetFileName(imagePath);
+                this.Title = $"🖼️ {fileName}";
+
+                AutoSizeWindow(bitmap);
+                Dispatcher.BeginInvoke(new Action(() => ApplyOneToOne()), DispatcherPriority.Loaded);
+                UpdateImageInfo();
             }
             catch (Exception ex)
             {
-                LogImage("💥 SetAnimatedSource failed", ex);
-                throw;
+                LogImage("💥 Exception in LoadGif", ex);
+                ShowError($"Failed to load GIF: {ex.Message}");
             }
-
-            currentImage = bitmap;
-            var fileName = Path.GetFileName(imagePath);
-            this.Title = $"🖼️ {fileName}";
-
-            AutoSizeWindow(bitmap);
-            Dispatcher.BeginInvoke(new Action(() => ApplyOneToOne()), DispatcherPriority.Loaded);
         }
 
         private void ApplyStaticImage(BitmapImage bitmap, string imagePath)
@@ -455,6 +470,14 @@ namespace SnipShottyBoard.UI
             LoadImage(allImagePaths[currentImageIndex]);
         }
 
+        // 🔄 Show/hide Prev/Next buttons based on whether multiple images are available
+        private void UpdateNavigationButtons()
+        {
+            bool hasMultiple = allImagePaths != null && allImagePaths.Count > 1;
+            PrevButton.Visibility = hasMultiple ? Visibility.Visible : Visibility.Collapsed;
+            NextButton.Visibility = hasMultiple ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         // 📊 Update status bar information display
         private void UpdateImageInfo()
         {
@@ -603,15 +626,18 @@ namespace SnipShottyBoard.UI
                 }
                 catch { /* ignore */ }
 
-                var prevZoomText = StatusZoom.Text;
                 StatusZoom.Text = isGifPaused ? "⏸️ GIF Paused" : "▶️ Playing";
-                DispatcherTimer timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
-                timer.Tick += (s, args) => {
-                    timer.Stop();
-                    StatusZoom.Text = prevZoomText;
-                    UpdateStatusZoom();
-                };
-                timer.Start();
+                _gifStatusTimer?.Stop();
+                if (_gifStatusTimer == null)
+                {
+                    _gifStatusTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
+                    _gifStatusTimer.Tick += (s, args) =>
+                    {
+                        _gifStatusTimer.Stop();
+                        UpdateStatusZoom();
+                    };
+                }
+                _gifStatusTimer.Start();
             }
         }
 
@@ -654,10 +680,14 @@ namespace SnipShottyBoard.UI
         {
             try
             {
-                long memBefore = GC.GetTotalMemory(false);
-                
-                try { ImageBehavior.SetAnimatedSource(DisplayImage, null); } catch { /* safe */ }
-                
+                try
+                {
+                    var ctrl = ImageBehavior.GetAnimationController(DisplayImage);
+                    ctrl?.Dispose(); // releases BitmapDecoder + all decoded GIF frame buffers
+                    ImageBehavior.SetAnimatedSource(DisplayImage, null);
+                }
+                catch { /* safe */ }
+
                 if (currentImage != null && !currentImage.IsFrozen)
                 {
                     try { currentImage.StreamSource?.Dispose(); } catch { /* safe */ }
@@ -665,10 +695,11 @@ namespace SnipShottyBoard.UI
 
                 if (DisplayImage != null) DisplayImage.Source = null;
                 currentImage = null;
+
+                if (!string.IsNullOrEmpty(currentImagePath))
+                    ImageCacheManager.Instance.RemoveFromCache(currentImagePath + FullResCacheSuffix);
+
                 currentImagePath = null;
-                
-                GC.Collect();
-                GC.WaitForPendingFinalizers();
             }
             catch (Exception ex)
             {
@@ -688,6 +719,18 @@ namespace SnipShottyBoard.UI
 
             ReleaseImageResources();
             base.OnClosed(e);
+
+            // Reclaim LOH memory from full-res BitmapImages on a background thread.
+            // Large objects (>85KB) live on the LOH which is not compacted by default.
+            // Without this, Task Manager shows committed RAM ~117MB above baseline after close.
+            Task.Run(() =>
+            {
+                System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
+                    System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+                GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+                GC.WaitForPendingFinalizers();
+                GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+            });
         }
 
         #endregion

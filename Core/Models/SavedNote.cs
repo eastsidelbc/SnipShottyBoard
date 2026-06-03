@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Serialization;
 
 namespace SnipShottyBoard.Core.Models
 {
@@ -90,6 +91,15 @@ namespace SnipShottyBoard.Core.Models
         // ⚠️ Deprecated — consumers should migrate to Media directly.
         // This getter resolves filenames → full paths at runtime.
         // The setter converts full paths back into Media entries.
+        //
+        // 🐛 BUG-LABELSIZE FIX (2026-06-03): [JsonIgnore] stops System.Text.Json from
+        // round-tripping this property. Without it, the deserializer reads `media`
+        // (loading v3 fields), then reads `imageFiles` whose setter calls
+        // Media.Clear() and recreates MediaReference objects with DEFAULT v3 values
+        // (Label="", ThumbnailSize=150, ShowLabel=true, ...) — wiping every
+        // per-image customization on every load. [Obsolete] only warns the compiler;
+        // it does not stop serialization.
+        [JsonIgnore]
         [System.Obsolete("Use Media property instead. This will be removed in v1.0.")]
         public List<string> ImageFiles
         {
@@ -118,6 +128,8 @@ namespace SnipShottyBoard.Core.Models
         // 🕒 Legacy: timestamp dict — computed from Media for backward compat
         // 
         // ⚠️ Deprecated — consumers should migrate to Media directly.
+        // 🐛 [JsonIgnore] — see ImageFiles above for rationale (BUG-LABELSIZE).
+        [JsonIgnore]
         [System.Obsolete("Use Media property instead. This will be removed in v1.0.")]
         public Dictionary<string, DateTime> ImageTimestamps
         {

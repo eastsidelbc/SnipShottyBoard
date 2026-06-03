@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -28,28 +28,34 @@ namespace SnipShottyBoard.UI.Views
     public partial class MainWindow : FluentWindow
     {
         // 🏷️ Manager instances
-        private TabManager tabManager;
-        private ThemeManager themeManager;
-        private StatusBarManager statusBarManager;
-        private KeyboardHandler keyboardHandler;
+        private TabManager _tabManager;
+        private ThemeManager _themeManager;
+        private StatusBarManager _statusBarManager;
+        private KeyboardHandler _keyboardHandler;
         private LoggingService loggingService;
-        private HelpManager helpManager;
-        private SettingsManager settingsManager;
+        private HelpManager _helpManager;
+        private SettingsManager _settingsManager;
         
         // ⚙️ Current Settings
-        private AppSettings currentSettings;
+        private AppSettings _currentSettings;
         
         // ⏰ Timers
-        private DispatcherTimer autoSaveTimer;
-        private DispatcherTimer statusTimer;
-        private DispatcherTimer recoveryTimer;
-        private bool hasUnsavedChanges = false;
+        private DispatcherTimer _autoSaveTimer;
+        private DispatcherTimer _statusTimer;
+        private DispatcherTimer _recoveryTimer;
+        private bool _hasUnsavedChanges = false;
 
         // 💾 Debounced window position tracker (fixes choppy dragging)
         private WindowPositionTracker _positionTracker;
 
         // 🪟 Window data for multi-window support
         public NoteWindowData WindowData { get; private set; }
+
+        /// <summary>
+        /// Typed window identity — used by NoteListWindow for duplicate detection, rename, and close.
+        /// Avoids Tag property (untyped object) and fixes primary window never being identified.
+        /// </summary>
+        public Guid WindowId => WindowData?.Id ?? Guid.Empty;
 
         /// <summary>
         /// 🔄 Ensures main window has note window data
@@ -133,24 +139,31 @@ namespace SnipShottyBoard.UI.Views
                 
                 // 🪟 SIMPLE APPROACH: Every window gets note window data (no special cases)
                 WindowData = windowData ?? EnsureMainWindowHasData();
+
+                // 🪟 Sticky-Notes-style restore: mark this window as currently open
+                // so the next app start reopens it. Flipped back to false in
+                // MainWindow_Closing if the user closes THIS window while others
+                // are still up.
+                WindowData.IsOpen = true;
                 
                 // 🎨 Load settings to get the correct theme before initializing UI
                 var settingsToLoad = DataManager.LoadSettings();
-                currentSettings = settingsToLoad;
+                _currentSettings = settingsToLoad;
                 
                 // 🎨 Initialize theme manager with correct theme from settings
-                themeManager = new ThemeManager();
-                if (currentSettings != null)
+                _themeManager = new ThemeManager();
+                if (_currentSettings != null)
                 {
-                    themeManager.LoadTheme(currentSettings.IsDarkMode);
+                    _themeManager.LoadTheme(_currentSettings.IsDarkMode);
                     loggingService.LogDebug($"🎨 Theme initialized: Dark");
                 }
                 else
                 {
-                    themeManager.InitializeTheme(); // Fallback to default
+                    _themeManager.InitializeTheme(); // Fallback to default
                 }
                 
                 InitializeComponent();
+                WindowChromeFix.Apply(this);
                 InitializeManagers();
                 SetupTimers();
                 SetupEventHandlers();
@@ -191,36 +204,6 @@ namespace SnipShottyBoard.UI.Views
             }
         }
 
-        /// <summary>
-        /// Sets the DWM composition background to our dark theme color.
-        /// This is the correct fix for white flash during window resize.
-        /// 
-        /// WHY THIS WORKS:
-        /// Every WPF window has a Win32 HWND background brush set to system white.
-        /// When you resize, Windows paints this HWND brush BEFORE WPF renders.
-        /// Setting Window.Background or Grid.Background is WPF-level — too late.
-        /// HwndSource.CompositionTarget.BackgroundColor sets the actual DWM
-        /// composition background for this HWND so any rendering gap shows dark.
-        /// 
-        /// WHY NOT OnSourceInitialized + WindowChrome:
-        /// Replacing FluentWindow's internal WindowChrome via SetWindowChrome()
-        /// breaks FluentWindow's HWND hook (WM_NCHITTEST) causing ghost/mirrored
-        /// DWM caption buttons to appear when dragging the left resize edge.
-        /// </summary>
-        protected override void OnSourceInitialized(EventArgs e)
-        {
-            base.OnSourceInitialized(e);
-
-            // Set DWM composition background to our dark app color
-            // #111113 = AppBackgroundBrush
-            var source = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
-            if (source?.CompositionTarget != null)
-            {
-                source.CompositionTarget.BackgroundColor =
-                    System.Windows.Media.Color.FromRgb(0x11, 0x11, 0x13);
-            }
-        }
-
         #region Initialization
         // 🔧 Initialize all manager instances
         private void InitializeManagers()
@@ -229,13 +212,13 @@ namespace SnipShottyBoard.UI.Views
             loggingService.LogDebug("🚀 Starting MainWindow initialization", "UI");
 
             // DataManager is now static
-            // themeManager already initialized in constructor
+            // _themeManager already initialized in constructor
             
-            tabManager = new TabManager(TabHeaderPanel, TabContentArea);
-            statusBarManager = new StatusBarManager(TabCountStatus, WordCountStatus, SaveStatus, TimeStatus);
-            keyboardHandler = new KeyboardHandler();
-            helpManager = new HelpManager();
-            settingsManager = new SettingsManager();
+            _tabManager = new TabManager(TabHeaderPanel, TabContentArea);
+            _statusBarManager = new StatusBarManager(TabCountStatus, WordCountStatus, SaveStatus, TimeStatus);
+            _keyboardHandler = new KeyboardHandler();
+            _helpManager = new HelpManager();
+            _settingsManager = new SettingsManager();
 
             loggingService.LogDebug("✅ All managers initialized", "UI");
         }
@@ -244,40 +227,40 @@ namespace SnipShottyBoard.UI.Views
         private void SetupTimers()
         {
             // ⏰ Setup auto-save timer (save every 5 seconds if changes exist)
-            autoSaveTimer = new DispatcherTimer
+            _autoSaveTimer = new DispatcherTimer
             {
                 Interval = TimeSpan.FromSeconds(SnipShottyBoard.Data.AppConstants.DefaultAutoSaveIntervalSeconds)
             };
-            autoSaveTimer.Tick += (s, e) => {
-                if (hasUnsavedChanges) SaveApplicationData();
+            _autoSaveTimer.Tick += (s, e) => {
+                if (_hasUnsavedChanges) SaveApplicationData();
             };
-            autoSaveTimer.Start();
+            _autoSaveTimer.Start();
 
             // 💾 Setup recovery journal timer (write snapshot every 2s when dirty)
-            recoveryTimer = new DispatcherTimer
+            _recoveryTimer = new DispatcherTimer
             {
                 Interval = TimeSpan.FromSeconds(SnipShottyBoard.Data.AppConstants.RecoveryJournalIntervalSeconds)
             };
-            recoveryTimer.Tick += (s, e) => {
-                if (hasUnsavedChanges)
+            _recoveryTimer.Tick += (s, e) => {
+                if (_hasUnsavedChanges)
                 {
                     var master = new SnipShottyBoard.Data.MasterData
                     {
                         Windows = NoteWindowManager.Instance.GetActiveWindows(),
-                        Settings = currentSettings ?? new AppSettings()
+                        Settings = _currentSettings ?? new AppSettings()
                     };
                     DataManager.SaveRecoverySnapshot(master);
                 }
             };
-            recoveryTimer.Start();
+            _recoveryTimer.Start();
 
             // 📊 Setup status bar timer (update every second)
-            statusTimer = new DispatcherTimer
+            _statusTimer = new DispatcherTimer
             {
                 Interval = TimeSpan.FromSeconds(SnipShottyBoard.Data.AppConstants.StatusUpdateIntervalSeconds)
             };
-            statusTimer.Tick += (s, e) => UpdateStatusBar();
-            statusTimer.Start();
+            _statusTimer.Tick += (s, e) => UpdateStatusBar();
+            _statusTimer.Start();
 
             loggingService.LogDebug("✅ Timers started", "UI");
         }
@@ -286,58 +269,51 @@ namespace SnipShottyBoard.UI.Views
         private void SetupEventHandlers()
         {
             // Window events
-            this.PreviewKeyDown += (s, e) => keyboardHandler.HandleKeyDown(e);
+            this.PreviewKeyDown += (s, e) => _keyboardHandler.HandleKeyDown(e);
             this.Closing += MainWindow_Closing;
 
             // TabManager events
-            tabManager.OnDataChanged += (hasChanges) => hasUnsavedChanges = hasChanges;
-            tabManager.OnStatusUpdateRequested += UpdateStatusBar;
-            tabManager.OnLogDebug += (message, _) => loggingService.LogDebug(message);
-            tabManager.OnLogError += (message, ex) => loggingService.LogError(message, ex, "Manager");
-            tabManager.OnSettingsNeedUpdate += () => {
-                hasUnsavedChanges = true;
+            _tabManager.OnDataChanged += (hasChanges) => _hasUnsavedChanges = hasChanges;
+            _tabManager.OnStatusUpdateRequested += UpdateStatusBar;
+            _tabManager.OnLogDebug += (message, _) => loggingService.LogDebug(message);
+            _tabManager.OnLogError += (message, ex) => loggingService.LogError(message, ex, "Manager");
+            _tabManager.OnSettingsNeedUpdate += () => {
+                _hasUnsavedChanges = true;
                 SaveApplicationData(); // Save immediately when settings change
                 loggingService.LogDebug("⚙️ Settings updated due to TabManager preference change");
             };
 
             // ThemeManager events
-            themeManager.OnThemeChanged += () => {
-                hasUnsavedChanges = true;
-                UpdateStatusBar();
-                this.InvalidateVisual();
-                
-                // 🎨 Refresh tab visuals when theme changes (only when needed)
-                tabManager.RefreshTabVisuals();
-            };
+            _themeManager.OnThemeChanged += OnThemeChangedHandler;
 
             // KeyboardHandler events
-            keyboardHandler.OnNewTabRequested += () => tabManager.CreateNewTab();
-            keyboardHandler.OnDeleteTabRequested += () => tabManager.DeleteCurrentTab();
-            keyboardHandler.OnRenameTabRequested += () => tabManager.StartRenameCurrentTab();
-            keyboardHandler.OnSwitchTabRequested += () => tabManager.SwitchToNextTab();
-            keyboardHandler.OnTabNavigationRequested += (direction) => tabManager.NavigateTab(direction);
-            keyboardHandler.OnImagePasted += (imgControl, imagePath) => {
-                if (tabManager.SelectedTab != null)
+            _keyboardHandler.OnNewTabRequested += () => _tabManager.CreateNewTab();
+            _keyboardHandler.OnDeleteTabRequested += () => _tabManager.DeleteCurrentTab();
+            _keyboardHandler.OnRenameTabRequested += () => _tabManager.StartRenameCurrentTab();
+            _keyboardHandler.OnSwitchTabRequested += () => _tabManager.SwitchToNextTab();
+            _keyboardHandler.OnTabNavigationRequested += (direction) => _tabManager.NavigateTab(direction);
+            _keyboardHandler.OnImagePasted += (imgControl, imagePath) => {
+                if (_tabManager.SelectedTab != null)
                 {
-                    tabManager.SelectedTab.Content.AddImage(imgControl, imagePath);
+                    _tabManager.SelectedTab.Content.AddImage(imgControl, imagePath);
                 }
             };
-            keyboardHandler.OnRichTextFormattingRequested += (formatType) => {
-                if (tabManager.SelectedTab?.Content?.RichTextBox != null)
+            _keyboardHandler.OnRichTextFormattingRequested += (formatType) => {
+                if (_tabManager.SelectedTab?.Content?.RichTextBox != null)
                 {
-                    ApplyRichTextFormatting(tabManager.SelectedTab.Content.RichTextBox, formatType);
+                    ApplyRichTextFormatting(_tabManager.SelectedTab.Content.RichTextBox, formatType);
                 }
             };
 
             // SettingsManager events
-            settingsManager.OnLogDebug += (message) => loggingService.LogDebug(message);
-            settingsManager.OnLogError += (message, ex) => loggingService.LogError(message, ex, "Manager");
-            settingsManager.OnResetDeleteConfirmationRequested += () => {
-                tabManager.ResetDeleteConfirmationPreference();
+            _settingsManager.OnLogDebug += (message) => loggingService.LogDebug(message);
+            _settingsManager.OnLogError += (message, ex) => loggingService.LogError(message, ex, "Manager");
+            _settingsManager.OnResetDeleteConfirmationRequested += () => {
+                _tabManager.ResetDeleteConfirmationPreference();
                 loggingService.LogDebug("🔄 Delete confirmation preference reset via settings");
             };
-            settingsManager.OnSettingsChanged += () => {
-                hasUnsavedChanges = true;
+            _settingsManager.OnSettingsChanged += () => {
+                _hasUnsavedChanges = true;
                 UpdateStatusBar();
                 this.InvalidateVisual();
                 
@@ -345,8 +321,8 @@ namespace SnipShottyBoard.UI.Views
                 try
                 {
                     var appData = new DataManager().LoadAppData();
-                    currentSettings = appData.Settings ?? new AppSettings();
-                    tabManager.UpdateSettings(currentSettings);
+                    _currentSettings = appData.Settings ?? new AppSettings();
+                    _tabManager.UpdateSettings(_currentSettings);
                     loggingService.LogDebug("⚙️ Settings reloaded and applied to TabManager");
                 }
                 catch (Exception ex)
@@ -420,7 +396,7 @@ namespace SnipShottyBoard.UI.Views
                 }
 
                 // Trigger data change for auto-save
-                hasUnsavedChanges = true;
+                _hasUnsavedChanges = true;
             }
             catch (Exception ex)
             {
@@ -493,7 +469,7 @@ namespace SnipShottyBoard.UI.Views
                 // Collect referenced filenames from all open tabs
                 var referencedFilenames = new HashSet<string>();
                 int totalRefs = 0;
-                foreach (var tab in tabManager.Tabs)
+                foreach (var tab in _tabManager.Tabs)
                 {
                     var files = tab.Content.ImageFiles;
                     totalRefs += files.Count;
@@ -521,7 +497,7 @@ namespace SnipShottyBoard.UI.Views
 
                 // Check for duplicate image entries within notes
                 int dupNotes = 0;
-                foreach (var tab in tabManager.Tabs)
+                foreach (var tab in _tabManager.Tabs)
                 {
                     var filenames = tab.Content.ImageFiles.Select(f => Path.GetFileName(f)).ToList();
                     if (filenames.Count != filenames.Distinct().Count())
@@ -540,14 +516,14 @@ namespace SnipShottyBoard.UI.Views
                     $"Notes with duplicate entries:   {dupNotes}\n" +
                     $"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
                     $"Do you want to delete {orphanCount} orphaned file(s) now?\n" +
-                    $"(Files within 24h grace period will also be deleted)",
+                    $"(Files added in the last 24h are protected and will NOT be deleted)",
                     "Vault Audit",
                     System.Windows.MessageBoxButton.YesNo,
                     System.Windows.MessageBoxImage.Question);
 
                 if (result == System.Windows.MessageBoxResult.Yes && orphanCount > 0)
                 {
-                    var deleted = SnipShottyBoard.Core.Managers.DataManager.CleanupOrphanedImages(daysGracePeriod: 0);
+                    var deleted = SnipShottyBoard.Core.Managers.DataManager.CleanupOrphanedImages(daysGracePeriod: 1);
                     System.Windows.MessageBox.Show(
                         this,
                         $"Deleted {deleted} orphaned file(s).",
@@ -577,8 +553,8 @@ namespace SnipShottyBoard.UI.Views
             }
         }
 
-        private void NewTab_Click(object sender, RoutedEventArgs e) => tabManager.CreateNewTab();
-        private void DeleteTab_Click(object sender, RoutedEventArgs e) => tabManager.DeleteCurrentTab();
+        private void NewTab_Click(object sender, RoutedEventArgs e) => _tabManager.CreateNewTab();
+        private void DeleteTab_Click(object sender, RoutedEventArgs e) => _tabManager.DeleteCurrentTab();
 
         // 📌 Pin button click - toggle always on top
         private void Pin_Click(object sender, RoutedEventArgs e)
@@ -588,10 +564,10 @@ namespace SnipShottyBoard.UI.Views
                 bool newState = !this.Topmost;
                 this.Topmost = newState;
                 
-                if (currentSettings != null)
+                if (_currentSettings != null)
                 {
-                    currentSettings.AlwaysOnTop = newState;
-                    DataManager.SaveSettings(currentSettings);
+                    _currentSettings.AlwaysOnTop = newState;
+                    DataManager.SaveSettings(_currentSettings);
                     loggingService.LogDebug($"📌 Always on top: {(newState ? "ON" : "OFF")}", "UI");
                 }
                 
@@ -671,7 +647,7 @@ namespace SnipShottyBoard.UI.Views
         private void Settings_Click(object sender, RoutedEventArgs e)
         {
             // 🔄 Get current settings from loaded data or create defaults
-            var settingsToShow = currentSettings ?? new AppSettings
+            var settingsToShow = _currentSettings ?? new AppSettings
             {
                 AutoSaveEnabled = true, // Get from current auto-save timer state
                 AutoSaveIntervalSeconds = 5, // Current interval
@@ -686,9 +662,9 @@ namespace SnipShottyBoard.UI.Views
 
             // 🔍 Update the ConfirmTabDeletion to reflect the current effective state
             // This ensures the checkbox shows the true state (unchecked if "don't ask again" was chosen)
-            settingsToShow.ConfirmTabDeletion = !tabManager.IsDeleteConfirmationDisabled;
+            settingsToShow.ConfirmTabDeletion = !_tabManager.IsDeleteConfirmationDisabled;
             
-            settingsManager.ShowSettingsWindow(settingsToShow);
+            _settingsManager.ShowSettingsWindow(settingsToShow);
         }
 
         private void Help_Click(object sender, RoutedEventArgs e)
@@ -698,16 +674,16 @@ namespace SnipShottyBoard.UI.Views
 
             // Help option
             var helpItem = new System.Windows.Controls.MenuItem { Header = "📖 Help & Shortcuts" };
-            helpItem.Click += (s, args) => helpManager.ShowHelpWindow();
+            helpItem.Click += (s, args) => _helpManager.ShowHelpWindow();
 
             // Quick Tips option
             var tipsItem = new System.Windows.Controls.MenuItem { Header = "💡 Quick Tips" };
-            tipsItem.Click += (s, args) => helpManager.ShowQuickTips();
+            tipsItem.Click += (s, args) => _helpManager.ShowQuickTips();
 
             // Reset Delete Confirmations option
             var resetConfirmItem = new System.Windows.Controls.MenuItem { Header = "🔄 Reset Delete Confirmations" };
             resetConfirmItem.Click += (s, args) => {
-                tabManager.ResetDeleteConfirmationPreference();
+                _tabManager.ResetDeleteConfirmationPreference();
                 CustomDialog.ShowInformation(
                     this,
                     "Delete confirmation dialogs have been reset.\nYou will be asked to confirm tab deletions again.",
@@ -717,7 +693,7 @@ namespace SnipShottyBoard.UI.Views
 
             // About option
             var aboutItem = new System.Windows.Controls.MenuItem { Header = "ℹ️ About" };
-            aboutItem.Click += (s, args) => helpManager.ShowAbout();
+            aboutItem.Click += (s, args) => _helpManager.ShowAbout();
 
             contextMenu.Items.Add(helpItem);
             contextMenu.Items.Add(tipsItem);
@@ -749,21 +725,21 @@ namespace SnipShottyBoard.UI.Views
                 loggingService.LogDebug($"🪟 Loading data for window: {WindowData.Title}");
 
                 // 📋 Settings already loaded in constructor, just update if needed
-                if (currentSettings == null)
+                if (_currentSettings == null)
                 {
-                    currentSettings = settingsToLoad;
+                    _currentSettings = settingsToLoad;
                 }
 
                 // ⚙️ Update TabManager with current settings
-                tabManager.UpdateSettings(currentSettings);
+                _tabManager.UpdateSettings(_currentSettings);
 
                 if (notesToLoad?.Any() == true)
                 {
                     try
                     {
-                        tabManager.LoadTabs(notesToLoad);
+                        _tabManager.LoadTabs(notesToLoad);
                         // 🎨 Refresh tab visuals after theme is loaded
-                        tabManager.RefreshTabVisuals();
+                        _tabManager.RefreshTabVisuals();
                     }
                     catch (Exception loadEx)
                     {
@@ -771,25 +747,25 @@ namespace SnipShottyBoard.UI.Views
                         // Show a blank tab for this session but DO NOT mark as changed.
                         // This prevents autosave from overwriting good data with a blank state.
                         loggingService.LogError("CRITICAL: LoadTabs failed — data preserved on disk, showing blank tab for this session only", loadEx, "Data");
-                        tabManager.CreateNewTab();
-                        hasUnsavedChanges = false;
+                        _tabManager.CreateNewTab();
+                        _hasUnsavedChanges = false;
                     }
                 }
                 else
                 {
-                    tabManager.CreateNewTab();
+                    _tabManager.CreateNewTab();
                 }
 
                 // 📌 Apply saved AlwaysOnTop state and update pin button visual
-                if (currentSettings != null)
+                if (_currentSettings != null)
                 {
-                    this.Topmost = currentSettings.AlwaysOnTop;
+                    this.Topmost = _currentSettings.AlwaysOnTop;
                     // Defer pin button visual update until UI is fully loaded
                     this.Dispatcher.BeginInvoke(new Action(() =>
                     {
-                        UpdatePinButtonVisual(currentSettings.AlwaysOnTop);
+                        UpdatePinButtonVisual(_currentSettings.AlwaysOnTop);
                     }), System.Windows.Threading.DispatcherPriority.Loaded);
-                    loggingService.LogDebug($"📌 Always on top restored: {currentSettings.AlwaysOnTop}", "UI");
+                    loggingService.LogDebug($"📌 Always on top restored: {_currentSettings.AlwaysOnTop}", "UI");
                 }
 
                 UpdateStatusBar();
@@ -798,10 +774,10 @@ namespace SnipShottyBoard.UI.Views
             catch (Exception ex)
             {
                 loggingService.LogError("Error loading app data", ex, "Data");
-                currentSettings = new AppSettings();
-                tabManager.UpdateSettings(currentSettings);
-                tabManager.CreateNewTab();
-                hasUnsavedChanges = false;
+                _currentSettings = new AppSettings();
+                _tabManager.UpdateSettings(_currentSettings);
+                _tabManager.CreateNewTab();
+                _hasUnsavedChanges = false;
             }
         }
 
@@ -810,7 +786,7 @@ namespace SnipShottyBoard.UI.Views
         {
             try
             {
-                var currentNotes = tabManager.GetSaveData();
+                var currentNotes = _tabManager.GetSaveData();
 
                 // 🪟 SIMPLE: All windows save the same way now
                 WindowData.Notes = currentNotes;
@@ -825,10 +801,10 @@ namespace SnipShottyBoard.UI.Views
                 noteManager.SaveNoteWindows();
                 
                 // Also save global settings (shared across all windows)
-                if (currentSettings != null)
+                if (_currentSettings != null)
                 {
-                    currentSettings.AlwaysOnTop = this.Topmost;
-                    DataManager.SaveSettings(currentSettings);
+                    _currentSettings.AlwaysOnTop = this.Topmost;
+                    DataManager.SaveSettings(_currentSettings);
                 }
                 
                 loggingService.LogDebug($"🪟 Saved data for window: {WindowData.Title}");
@@ -836,12 +812,14 @@ namespace SnipShottyBoard.UI.Views
                 // 🗑️ Clear recovery snapshot on successful save
                 DataManager.ClearRecoverySnapshot();
 
-                hasUnsavedChanges = false;
+                _hasUnsavedChanges = false;
                 UpdateStatusBar();
             }
             catch (Exception ex)
             {
                 loggingService.LogError("Error saving app data", ex, "Data");
+                _hasUnsavedChanges = true;
+                _statusBarManager?.ShowSaveError();
             }
         }
         #endregion
@@ -850,10 +828,18 @@ namespace SnipShottyBoard.UI.Views
         // 📊 Update status bar
         private void UpdateStatusBar()
         {
-            var currentTabText = tabManager.SelectedTab?.Content?.TextContent ?? "";
-            statusBarManager.UpdateStatusBar(tabManager.TabCount, currentTabText, hasUnsavedChanges);
+            var currentTabText = _tabManager.SelectedTab?.Content?.TextContent ?? "";
+            _statusBarManager.UpdateStatusBar(_tabManager.TabCount, currentTabText, _hasUnsavedChanges);
         }
 
+        // 🎨 Theme change handler (named method for proper unsubscribe)
+        private void OnThemeChangedHandler()
+        {
+            _hasUnsavedChanges = true;
+            UpdateStatusBar();
+            this.InvalidateVisual();
+            _tabManager.RefreshTabVisuals();
+        }
 
         #endregion
 
@@ -863,6 +849,10 @@ namespace SnipShottyBoard.UI.Views
         {
             try
             {
+                // 🔌 Unsubscribe event handlers to prevent memory leaks
+                if (_themeManager != null)
+                    _themeManager.OnThemeChanged -= OnThemeChangedHandler;
+
                 // 💾 Stop position tracker and force final save
                 if (_positionTracker != null)
                 {
@@ -871,21 +861,45 @@ namespace SnipShottyBoard.UI.Views
                     _positionTracker = null;
                     loggingService.LogDebug("✅ Position tracker disposed");
                 }
-                
+
+                // 🪟 Sticky-Notes-style restore tracking:
+                // If other MainWindow instances are still open, this is a per-window
+                // close — mark this one's IsOpen=false so it does NOT reopen next launch.
+                // If this is the LAST MainWindow, leave IsOpen=true so the app reopens
+                // it next launch (matches Windows Sticky Notes app behavior).
+                if (WindowData != null)
+                {
+                    var otherOpenWindows = Application.Current.Windows
+                        .OfType<MainWindow>()
+                        .Where(w => !ReferenceEquals(w, this))
+                        .Count();
+
+                    if (otherOpenWindows > 0)
+                    {
+                        WindowData.IsOpen = false;
+                        loggingService.LogDebug($"🪟 Per-window close: IsOpen=false ({otherOpenWindows} other window(s) still open)");
+                    }
+                    else
+                    {
+                        loggingService.LogDebug("🪟 Last window closing: preserving IsOpen=true for next launch");
+                    }
+                }
+
                 // 💾 ALWAYS save window state (position/size) on close, regardless of content changes
                 SaveApplicationData();
                 loggingService.LogDebug("💾 Window state saved on close");
 
                 // 🛑 Stop and dispose timers
-                autoSaveTimer?.Stop();
-                autoSaveTimer = null;
-                statusTimer?.Stop();
-                statusTimer = null;
-                recoveryTimer?.Stop();
-                recoveryTimer = null;
+                _autoSaveTimer?.Stop();
+                _autoSaveTimer = null;
+                _statusTimer?.Stop();
+                _statusTimer = null;
+                _recoveryTimer?.Stop();
+                _recoveryTimer = null;
 
                 // 🗑️ Cleanup managers
-                settingsManager?.Dispose();
+                _settingsManager?.Dispose();
+                LoggingService.Shutdown(); // Flush and close Serilog file handle
                 
                 loggingService.LogDebug("🧹 MainWindow cleanup completed");
             }

@@ -26,17 +26,23 @@ namespace SnipShottyBoard.Core.Managers
         private static readonly string ImagesFolder = Path.Combine(AppDataFolder, "images");
         private static readonly string SettingsFilePath = Path.Combine(AppDataFolder, "settings.json");
 
-        // ✅ Phase 4 Persistence Fix: Canonical snapshot migration
-        private static readonly string CanonicalSnapshotPath = Path.Combine(AppDataFolder, "notewindows-20251120-172254.json");
-        private static readonly string MigrationFlagPath = Path.Combine(AppDataFolder, "notewindows_snapshot_applied.flag");
-
         // ✅ Sprint A Phase A.1: Legacy consolidation flag
         private static readonly string MasterMigrationFlagPath = Path.Combine(AppDataFolder, "master_migration_applied.flag");
 
         static DataManager()
         {
+            // Path constants only — no file I/O here.
+            // File I/O happens in Initialize(), called explicitly from App.OnStartup.
+        }
+
+        /// <summary>
+        /// Called once from App.OnStartup before anything else.
+        /// Creates app directories and runs one-time legacy migration.
+        /// Errors surface as real exceptions (not TypeInitializationException).
+        /// </summary>
+        public static void Initialize()
+        {
             EnsureDirectoryExists();
-            ApplyCanonicalSnapshotIfNeeded();
             MigrateToMasterIfNeeded();
         }
 
@@ -49,61 +55,6 @@ namespace SnipShottyBoard.Core.Managers
                 Directory.CreateDirectory(ImagesFolder);
         }
         
-        /// <summary>
-        /// 🔧 Phase 4 Persistence Fix: One-time migration from canonical snapshot
-        /// Applies notewindows-20251120-172254.json as the canonical source, ONCE ONLY
-        /// </summary>
-        private static void ApplyCanonicalSnapshotIfNeeded()
-        {
-            try
-            {
-                // If flag exists, migration already completed
-                if (File.Exists(MigrationFlagPath))
-                {
-                    LoggingService.LogDebugStatic("Canonical snapshot migration already applied (flag exists)", "Data");
-                    return;
-                }
-                
-                // If canonical snapshot doesn't exist, nothing to migrate
-                if (!File.Exists(CanonicalSnapshotPath))
-                {
-                    LoggingService.LogDebugStatic("No canonical snapshot found, skipping migration", "Data");
-                    // Create flag anyway to prevent future checks
-                    File.WriteAllText(MigrationFlagPath, $"No snapshot available at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                    return;
-                }
-                
-                LoggingService.LogInfoStatic("🔧 Applying canonical snapshot migration...", "Data");
-                
-                // Backup current notewindows.json if it exists
-                if (File.Exists(NoteWindowsFilePath))
-                {
-                    var backupPath = Path.Combine(AppDataFolder, $"notewindows-previous-{DateTime.Now:yyyyMMdd-HHmmss}.json");
-                    File.Copy(NoteWindowsFilePath, backupPath, overwrite: true);
-                    LoggingService.LogInfoStatic($"Backed up current notewindows.json to {Path.GetFileName(backupPath)}", "Data");
-                }
-                
-                // Copy canonical snapshot to notewindows.json
-                File.Copy(CanonicalSnapshotPath, NoteWindowsFilePath, overwrite: true);
-                LoggingService.LogInfoStatic($"✅ Applied canonical snapshot: {Path.GetFileName(CanonicalSnapshotPath)} → notewindows.json", "Data");
-                
-                // Create flag file to prevent re-migration
-                File.WriteAllText(MigrationFlagPath, $"Canonical snapshot applied successfully at {DateTime.Now:yyyy-MM-dd HH:mm:ss}\nSource: {CanonicalSnapshotPath}");
-                LoggingService.LogInfoStatic("✅ Migration flag created - will not run again", "Data");
-                
-                // Verify the migration worked
-                var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-                var json = File.ReadAllText(NoteWindowsFilePath);
-                var windows = JsonSerializer.Deserialize<List<NoteWindowData>>(json, options);
-                LoggingService.LogInfoStatic($"✅ Verification: {windows?.Count ?? 0} windows loaded from migrated file", "Data");
-            }
-            catch (Exception ex)
-            {
-                LoggingService.LogErrorStatic("Failed to apply canonical snapshot migration", ex, "Data");
-                // Don't throw - let app continue with whatever data exists
-            }
-        }
-
         /// <summary>
         /// Sprint A Phase A.1: One-time migration from legacy files to master.json
         /// On first run after this change, consolidates notewindows.json + settings.json into master.json.
@@ -179,6 +130,7 @@ namespace SnipShottyBoard.Core.Managers
                         FilePath = PathSanitizer.SanitizePath(MasterFilePath),
                         DurationMs = stopwatch.ElapsedMilliseconds
                     });
+                    throw new IOException($"Failed to save master data to {PathSanitizer.SanitizePath(MasterFilePath)} — AtomicSave returned false");
                 }
             }
             catch (Exception ex)
@@ -232,9 +184,6 @@ namespace SnipShottyBoard.Core.Managers
 
         #region Notes Management
 
-        /// <summary>
-        /// 💾 Save notes data to file
-        /// </summary>
         /// <summary>
         /// 💾 Save notes data atomically with automatic backup
         /// ✅ Phase 4D P2.3: Migrated to atomic file operations
@@ -330,9 +279,6 @@ namespace SnipShottyBoard.Core.Managers
         #region Note Windows Management
 
         /// <summary>
-        /// 💾 Save note windows data to file
-        /// </summary>
-        /// <summary>
         /// 💾 Save note windows data atomically with automatic backup
         /// ✅ Phase 4D P2.3: Migrated to atomic file operations
         /// ✅ Phase 4D P2.7: Added performance timing
@@ -424,9 +370,6 @@ namespace SnipShottyBoard.Core.Managers
 
         #region Settings Management
 
-        /// <summary>
-        /// 💾 Save application settings
-        /// </summary>
         /// <summary>
         /// 💾 Save application settings atomically with automatic backup
         /// ✅ Phase 4D P2.3: Migrated to atomic file operations
@@ -718,9 +661,6 @@ namespace SnipShottyBoard.Core.Managers
         }
 
         /// <summary>
-        /// 🧹 Clean up old or unused data files
-        /// </summary>
-        /// <summary>
         /// 🗑️ Clean up orphaned image files (not referenced in any note)
         /// ✅ Phase 4D P2.7: Added performance timing
         /// </summary>
@@ -984,8 +924,21 @@ namespace SnipShottyBoard.Core.Managers
 
                 foreach (var recNote in recWindow.Notes)
                 {
-                    var savedNote = savedWindow.Notes.FirstOrDefault(
-                        n => !string.IsNullOrEmpty(n.Title) && n.Title == recNote.Title);
+                    // Try by index first — most reliable when two tabs share the same name
+                    var recIndex = recWindow.Notes.IndexOf(recNote);
+                    SavedNote? savedNote = null;
+
+                    if (recIndex >= 0 && recIndex < savedWindow.Notes.Count)
+                    {
+                        var candidate = savedWindow.Notes[recIndex];
+                        if (candidate.Title == recNote.Title)
+                            savedNote = candidate;
+                    }
+
+                    // Fallback: title match (handles tab additions/removals between save and crash)
+                    if (savedNote == null)
+                        savedNote = savedWindow.Notes.FirstOrDefault(
+                            n => !string.IsNullOrEmpty(n.Title) && n.Title == recNote.Title);
 
                     if (savedNote == null)
                     {

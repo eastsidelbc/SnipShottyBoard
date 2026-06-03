@@ -149,9 +149,14 @@ namespace SnipShottyBoard.Core.Schema
                 // Ensure Media list is initialized
                 note.Media ??= new List<MediaReference>();
 
-                // v2→v3: per-image customization fields default to sensible values
-                // (ThumbnailSizeDefault, IsHidden=false, etc. — already set in MediaReference ctor)
-                // No data transformation needed — new fields use default values.
+                // v2→v3: JSON deserialization overwrites constructor defaults with whatever
+                // was in the file. Old JSON with thumbnailSize=0 (or missing field) produces
+                // ThumbnailSize=0 — the ctor default never runs. Fix it explicitly here.
+                foreach (var media in note.Media)
+                {
+                    if (media.ThumbnailSize <= 0)
+                        media.ThumbnailSize = AppConstants.ThumbnailSizeDefault;
+                }
 
                 note.DataVersion = CurrentNoteSchemaVersion;
             }

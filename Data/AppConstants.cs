@@ -46,13 +46,13 @@ namespace SnipShottyBoard.Data
         /// Prevents memory exhaustion when many images pasted across tabs
         /// LRU eviction when limit reached
         /// </summary>
-        public const int MaxCachedImages = 100;
+        public const int MaxCachedImages = 60;
 
         /// <summary>
-        /// Maximum total memory for image cache in bytes (100MB)
+        /// Maximum total memory for image cache in bytes (30MB)
         /// Combined with image count limit for memory safety
         /// </summary>
-        public const long MaxImageCacheBytes = 100 * 1024 * 1024;
+        public const long MaxImageCacheBytes = 30 * 1024 * 1024; // 30MB — right-sized for sticky notes app
 
         /// <summary>
         /// Media container width in pixels
@@ -142,6 +142,13 @@ namespace SnipShottyBoard.Data
         /// Side margins and window borders
         /// </summary>
         public const int WindowChromeWidth = 20;
+
+        /// <summary>
+        /// Resize border thickness in device-independent pixels.
+        /// Industry standard hit area for edge resize cursors (VS Code, Slack, etc. use 8).
+        /// Default WPF WindowChrome uses 1 — far too small on high-DPI displays.
+        /// </summary>
+        public const int WindowResizeBorderThickness = 8;
         #endregion
 
         #region UI Timing

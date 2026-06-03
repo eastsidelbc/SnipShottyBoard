@@ -13,7 +13,7 @@
         WindowCornerPreference="Round"
         Background="{DynamicResource AppBackgroundBrush}">
 
-    <Grid Background="{DynamicResource AppBackgroundBrush}">
+    <Grid>
         <Grid.RowDefinitions>
             <!-- 🎯 FluentWindow Native Title Bar (auto-height) -->
             <RowDefinition Height="Auto" />

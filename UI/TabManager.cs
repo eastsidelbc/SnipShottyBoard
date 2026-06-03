@@ -18,27 +18,27 @@ namespace SnipShottyBoard.UI
     {
         private bool _disposed = false;
         #region Fields & Properties
-        private List<CustomTab> tabs = new List<CustomTab>();
-        private CustomTab selectedTab = null;
+        private List<CustomTab> _tabs = new List<CustomTab>();
+        private CustomTab _selectedTab = null;
         
         // UI Dependencies
-        private readonly Panel tabHeaderPanel;
-        private readonly ContentPresenter tabContentArea;
+        private readonly Panel _tabHeaderPanel;
+        private readonly ContentPresenter _tabContentArea;
         
         // 🎯 Drag and Drop Fields
-        private bool isDragging = false;
-        private Point dragStartPoint;
-        private Button draggedTab = null;
-        private Canvas dragCanvas = null;
-        private Border dragVisual = null;
-        private Border dropIndicator = null; // 📍 Drop indicator line
-        private int draggedTabOriginalIndex = -1;
-        private int dropTargetIndex = -1;
-        private int lastDropTargetIndex = -1; // 🎯 For hysteresis
+        private bool _isDragging = false;
+        private Point _dragStartPoint;
+        private Button _draggedTab = null;
+        private Canvas _dragCanvas = null;
+        private Border _dragVisual = null;
+        private Border _dropIndicator = null; // 📍 Drop indicator line
+        private int _draggedTabOriginalIndex = -1;
+        private int _dropTargetIndex = -1;
+        private int _lastDropTargetIndex = -1; // 🎯 For hysteresis
 
         // 🔕 User Preferences - Settings reference for delete confirmation
-        private AppSettings appSettings;
-        private bool skipDeleteConfirmation = false;
+        private AppSettings _appSettings;
+        private bool _skipDeleteConfirmation = false;
         
         // Event handlers for MainWindow communication
         public event Action<bool> OnDataChanged;
@@ -47,20 +47,20 @@ namespace SnipShottyBoard.UI
         public event Action<string, Exception> OnLogError;
         public event Action OnSettingsNeedUpdate; // New event for when settings need to be updated
         
-        public CustomTab SelectedTab => selectedTab;
-        public IReadOnlyList<CustomTab> Tabs => tabs.AsReadOnly();
-        public int TabCount => tabs.Count;
+        public CustomTab SelectedTab => _selectedTab;
+        public IReadOnlyList<CustomTab> Tabs => _tabs.AsReadOnly();
+        public int TabCount => _tabs.Count;
         
         // 🔍 Check if delete confirmation is effectively disabled
         public bool IsDeleteConfirmationDisabled => 
-            (appSettings != null && !appSettings.ConfirmTabDeletion) || skipDeleteConfirmation;
+            (_appSettings != null && !_appSettings.ConfirmTabDeletion) || _skipDeleteConfirmation;
         #endregion
 
         #region Constructor
-        public TabManager(Panel tabHeaderPanel, ContentPresenter tabContentArea)
+        public TabManager(Panel _tabHeaderPanel, ContentPresenter _tabContentArea)
         {
-            this.tabHeaderPanel = tabHeaderPanel ?? throw new ArgumentNullException(nameof(tabHeaderPanel));
-            this.tabContentArea = tabContentArea ?? throw new ArgumentNullException(nameof(tabContentArea));
+            this._tabHeaderPanel = _tabHeaderPanel ?? throw new ArgumentNullException(nameof(_tabHeaderPanel));
+            this._tabContentArea = _tabContentArea ?? throw new ArgumentNullException(nameof(_tabContentArea));
             
             // 🎯 Setup drag canvas for visual feedback
             InitializeDragCanvas();
@@ -79,18 +79,24 @@ namespace SnipShottyBoard.UI
                 return;
             }
             
-            this.appSettings = settings;
+            this._appSettings = settings;
+
+            // If settings explicitly re-enable confirmation, clear the in-session skip flag.
+            // Without this, the OR in IsDeleteConfirmationDisabled means re-enabling via Settings has no effect.
+            if (settings.ConfirmTabDeletion)
+                _skipDeleteConfirmation = false;
+
             OnLogDebug?.Invoke($"⚙️ TabManager settings updated - ConfirmTabDeletion: {settings.ConfirmTabDeletion}", string.Empty);
         }
 
         // 🔄 Reset "don't ask again" preference
         public void ResetDeleteConfirmationPreference()
         {
-            skipDeleteConfirmation = false;
+            _skipDeleteConfirmation = false;
             // 📝 Also update the settings to reflect this choice
-            if (appSettings != null)
+            if (_appSettings != null)
             {
-                appSettings.ConfirmTabDeletion = true;
+                _appSettings.ConfirmTabDeletion = true;
                 OnSettingsNeedUpdate?.Invoke(); // Notify that settings need to be saved
             }
             OnLogDebug?.Invoke("🔄 Delete confirmation preference reset and settings updated - will show confirmation dialogs again", string.Empty);
@@ -106,7 +112,7 @@ namespace SnipShottyBoard.UI
                 OnLogDebug?.Invoke("🎨 Starting drag canvas initialization", string.Empty);
                 
                 // Create a canvas that covers the entire window for drag visuals
-                dragCanvas = new Canvas
+                _dragCanvas = new Canvas
                 {
                     Background = Brushes.Transparent,
                     IsHitTestVisible = false
@@ -115,11 +121,11 @@ namespace SnipShottyBoard.UI
                 OnLogDebug?.Invoke("🎨 Drag canvas created", string.Empty);
                 
             // 📍 Create drop indicator line
-            dropIndicator = new Border
+            _dropIndicator = new Border
             {
                 Width = 3,
                 Height = 30,
-                Background = new SolidColorBrush(Color.FromRgb(74, 144, 226)), // Blue indicator
+                Background = (SolidColorBrush)Application.Current.FindResource(ResourceKeys.AccentBrush),
                 CornerRadius = new CornerRadius(1.5),
                 Visibility = Visibility.Hidden, // Hidden by default, shown during drag
                 Opacity = 0.8
@@ -138,11 +144,11 @@ namespace SnipShottyBoard.UI
                     {
                         OnLogDebug?.Invoke($"🎨 Found main grid with {mainGrid.Children.Count} children", string.Empty);
                         
-                        mainGrid.Children.Add(dragCanvas);
-                        Panel.SetZIndex(dragCanvas, 9999); // Ensure it's on top
+                        mainGrid.Children.Add(_dragCanvas);
+                        Panel.SetZIndex(_dragCanvas, 9999); // Ensure it's on top
                         
                         // Add drop indicator to canvas
-                        dragCanvas.Children.Add(dropIndicator);
+                        _dragCanvas.Children.Add(_dropIndicator);
                         
                         OnLogDebug?.Invoke("✅ Drag canvas and drop indicator added to main grid successfully", string.Empty);
                     }
@@ -169,13 +175,13 @@ namespace SnipShottyBoard.UI
             {
                 OnLogDebug?.Invoke("🎯 Starting drag operation", string.Empty);
                 
-                isDragging = true;
-                dragStartPoint = startPoint;
-                draggedTab = tabButton;
-                draggedTabOriginalIndex = GetTabIndex(tabButton);
-                lastDropTargetIndex = -1; // Reset hysteresis tracking
+                _isDragging = true;
+                _dragStartPoint = startPoint;
+                _draggedTab = tabButton;
+                _draggedTabOriginalIndex = GetTabIndex(tabButton);
+                _lastDropTargetIndex = -1; // Reset hysteresis tracking
                 
-                OnLogDebug?.Invoke($"🎯 Drag started for tab at index {draggedTabOriginalIndex}", string.Empty);
+                OnLogDebug?.Invoke($"🎯 Drag started for tab at index {_draggedTabOriginalIndex}", string.Empty);
                 
                 // 🎨 Create visual feedback
                 CreateDragVisual(tabButton);
@@ -183,7 +189,7 @@ namespace SnipShottyBoard.UI
                 // 🖱️ Capture mouse for drag operation
                 tabButton.CaptureMouse();
                 
-                OnLogDebug?.Invoke($"✅ Drag started for tab at index {draggedTabOriginalIndex}", string.Empty);
+                OnLogDebug?.Invoke($"✅ Drag started for tab at index {_draggedTabOriginalIndex}", string.Empty);
             }
             catch (Exception ex)
             {
@@ -199,8 +205,8 @@ namespace SnipShottyBoard.UI
                 // 📏 Create a visual copy of the tab button with neutral color so blue drop indicator is visible
                 var visualCopy = new Border
                 {
-                    Background = new SolidColorBrush(Color.FromArgb(140, 128, 128, 128)), // More transparent gray (was 200)
-                    BorderBrush = new SolidColorBrush(Color.FromArgb(120, 96, 96, 96)),   // More transparent border (was 180)
+                    Background = (SolidColorBrush)Application.Current.FindResource(ResourceKeys.DragGhostBrush),
+                    BorderBrush = (SolidColorBrush)Application.Current.FindResource(ResourceKeys.DragGhostBorderBrush),
                     BorderThickness = new Thickness(2, 2, 2, 2),
                     CornerRadius = new CornerRadius(3, 3, 0, 0), // Match Edge-like rounded top corners
                     Width = sourceButton.ActualWidth,
@@ -216,8 +222,8 @@ namespace SnipShottyBoard.UI
                     }
                 };
 
-                dragVisual = visualCopy;
-                dragCanvas.Children.Add(dragVisual);
+                _dragVisual = visualCopy;
+                _dragCanvas.Children.Add(_dragVisual);
                 
                 OnLogDebug?.Invoke("✅ Drag visual created", string.Empty);
             }
@@ -230,36 +236,36 @@ namespace SnipShottyBoard.UI
         // 🔄 Update drag visual position
         private void UpdateDragVisual(Point currentPosition)
         {
-            if (dragVisual != null)
+            if (_dragVisual != null)
             {
-                Canvas.SetLeft(dragVisual, currentPosition.X - dragVisual.Width / 2);
-                Canvas.SetTop(dragVisual, currentPosition.Y - dragVisual.Height / 2);
+                Canvas.SetLeft(_dragVisual, currentPosition.X - _dragVisual.Width / 2);
+                Canvas.SetTop(_dragVisual, currentPosition.Y - _dragVisual.Height / 2);
             }
         }
 
         // 📍 Update drop indicator position and visibility (row-aware for multi-row layout)
         private void UpdateDropIndicator(int targetIndex)
         {
-            if (dropIndicator == null || tabHeaderPanel == null) 
+            if (_dropIndicator == null || _tabHeaderPanel == null) 
             {
-                OnLogDebug?.Invoke($"🚫 UpdateDropIndicator skipped - dropIndicator: {dropIndicator != null}, tabHeaderPanel: {tabHeaderPanel != null}", string.Empty);
+                OnLogDebug?.Invoke($"🚫 UpdateDropIndicator skipped - _dropIndicator: {_dropIndicator != null}, _tabHeaderPanel: {_tabHeaderPanel != null}", string.Empty);
                 return;
             }
             
             try
             {
-                OnLogDebug?.Invoke($"📍 UpdateDropIndicator called with targetIndex: {targetIndex}, isDragging: {isDragging}", string.Empty);
+                OnLogDebug?.Invoke($"📍 UpdateDropIndicator called with targetIndex: {targetIndex}, _isDragging: {_isDragging}", string.Empty);
                 
-                if (targetIndex < 0 || !isDragging)
+                if (targetIndex < 0 || !_isDragging)
                 {
                     // Hide indicator
-                    dropIndicator.Visibility = Visibility.Hidden;
+                    _dropIndicator.Visibility = Visibility.Hidden;
                     OnLogDebug?.Invoke("📍 Drop indicator hidden", string.Empty);
                     return;
                 }
                 
                 // Show indicator
-                dropIndicator.Visibility = Visibility.Visible;
+                _dropIndicator.Visibility = Visibility.Visible;
                 OnLogDebug?.Invoke("📍 Drop indicator shown", string.Empty);
                 
                 // Calculate position for drop indicator
@@ -267,34 +273,34 @@ namespace SnipShottyBoard.UI
                 double indicatorY = 0;
                 Button referenceTab = null;
                 
-                if (targetIndex >= tabHeaderPanel.Children.Count)
+                if (targetIndex >= _tabHeaderPanel.Children.Count)
                 {
                     // Drop at end - position after last tab
-                    if (tabHeaderPanel.Children.Count > 0)
+                    if (_tabHeaderPanel.Children.Count > 0)
                     {
-                        var lastTab = tabHeaderPanel.Children[tabHeaderPanel.Children.Count - 1] as Button;
+                        var lastTab = _tabHeaderPanel.Children[_tabHeaderPanel.Children.Count - 1] as Button;
                         if (lastTab != null && Application.Current.MainWindow != null)
                         {
                             referenceTab = lastTab;
                             // Transform from tab to main window, then to drag canvas
                             var lastTabPosInWindow = lastTab.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
-                            var canvasPosInWindow = dragCanvas.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
+                            var canvasPosInWindow = _dragCanvas.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
                             indicatorX = lastTabPosInWindow.X - canvasPosInWindow.X + lastTab.ActualWidth + 2;
                             indicatorY = lastTabPosInWindow.Y - canvasPosInWindow.Y + 1;
                             OnLogDebug?.Invoke($"📍 Positioning at end: X={indicatorX}, Y={indicatorY}", string.Empty);
                         }
                     }
                 }
-                else if (targetIndex < tabHeaderPanel.Children.Count)
+                else if (targetIndex < _tabHeaderPanel.Children.Count)
                 {
                     // Drop before target tab
-                    var targetTab = tabHeaderPanel.Children[targetIndex] as Button;
+                    var targetTab = _tabHeaderPanel.Children[targetIndex] as Button;
                     if (targetTab != null && Application.Current.MainWindow != null)
                     {
                         referenceTab = targetTab;
                         // Transform from tab to main window, then to drag canvas
                         var targetTabPosInWindow = targetTab.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
-                        var canvasPosInWindow = dragCanvas.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
+                        var canvasPosInWindow = _dragCanvas.TransformToAncestor(Application.Current.MainWindow).Transform(new Point(0, 0));
                         indicatorX = targetTabPosInWindow.X - canvasPosInWindow.X - 2;
                         indicatorY = targetTabPosInWindow.Y - canvasPosInWindow.Y + 1;
                         OnLogDebug?.Invoke($"📍 Positioning before tab {targetIndex}: X={indicatorX}, Y={indicatorY}", string.Empty);
@@ -302,20 +308,20 @@ namespace SnipShottyBoard.UI
                 }
                 
                 // Position the drop indicator
-                Canvas.SetLeft(dropIndicator, indicatorX);
-                Canvas.SetTop(dropIndicator, indicatorY);
+                Canvas.SetLeft(_dropIndicator, indicatorX);
+                Canvas.SetTop(_dropIndicator, indicatorY);
                 
                 // Set height based on reference tab
                 if (referenceTab != null)
                 {
-                    dropIndicator.Height = referenceTab.ActualHeight - 2;
-                    OnLogDebug?.Invoke($"📍 Final position: X={indicatorX}, Y={indicatorY}, Height={dropIndicator.Height}", string.Empty);
+                    _dropIndicator.Height = referenceTab.ActualHeight - 2;
+                    OnLogDebug?.Invoke($"📍 Final position: X={indicatorX}, Y={indicatorY}, Height={_dropIndicator.Height}", string.Empty);
                 }
             }
             catch (Exception ex)
             {
                 OnLogError?.Invoke("Error updating drop indicator", ex);
-                dropIndicator.Visibility = Visibility.Hidden;
+                _dropIndicator.Visibility = Visibility.Hidden;
             }
         }
 
@@ -330,19 +336,19 @@ namespace SnipShottyBoard.UI
                 double mouseY = mousePosition.Y;
                 OnLogDebug?.Invoke($"🎯 Mouse position: X={mouseX:F1}, Y={mouseY:F1}", string.Empty);
                 
-                if (tabHeaderPanel.Children.Count == 0)
+                if (_tabHeaderPanel.Children.Count == 0)
                 {
                     return 0;
                 }
                 
-                // 📊 Group tabs by row (based on Y position with 5px tolerance)
+                // 📊 Group _tabs by row (based on Y position with 5px tolerance)
                 var tabPositions = new List<(int index, Button button, Point position, double rowY)>();
                 
-                for (int i = 0; i < tabHeaderPanel.Children.Count; i++)
+                for (int i = 0; i < _tabHeaderPanel.Children.Count; i++)
                 {
-                    if (tabHeaderPanel.Children[i] is Button tabButton)
+                    if (_tabHeaderPanel.Children[i] is Button tabButton)
                     {
-                        var tabPosition = tabButton.TransformToAncestor(tabHeaderPanel).Transform(new Point(0, 0));
+                        var tabPosition = tabButton.TransformToAncestor(_tabHeaderPanel).Transform(new Point(0, 0));
                         double rowY = Math.Round(tabPosition.Y / AppConstants.TabRowGroupingTolerance) * AppConstants.TabRowGroupingTolerance;
                         tabPositions.Add((i, tabButton, tabPosition, rowY));
                         OnLogDebug?.Invoke($"🎯 Tab {i}: X={tabPosition.X:F1}, Y={tabPosition.Y:F1}, RowY={rowY:F1}", string.Empty);
@@ -369,7 +375,7 @@ namespace SnipShottyBoard.UI
                 }
                 
                 var targetRow = rows[targetRowIndex].OrderBy(t => t.position.X).ToList();
-                OnLogDebug?.Invoke($"🎯 Target row {targetRowIndex} has {targetRow.Count} tabs", string.Empty);
+                OnLogDebug?.Invoke($"🎯 Target row {targetRowIndex} has {targetRow.Count} _tabs", string.Empty);
                 
                 // 🎯 Find position within the target row
                 double hysteresisBuffer = AppConstants.TabDragHysteresisBuffer;
@@ -381,11 +387,11 @@ namespace SnipShottyBoard.UI
                     
                     bool shouldInsertHere = false;
                     
-                    if (lastDropTargetIndex == tab.index && mouseX < tabMidX + hysteresisBuffer)
+                    if (_lastDropTargetIndex == tab.index && mouseX < tabMidX + hysteresisBuffer)
                     {
                         shouldInsertHere = true;
                     }
-                    else if (lastDropTargetIndex != tab.index && mouseX < tabMidX - hysteresisBuffer)
+                    else if (_lastDropTargetIndex != tab.index && mouseX < tabMidX - hysteresisBuffer)
                     {
                         shouldInsertHere = true;
                     }
@@ -393,7 +399,7 @@ namespace SnipShottyBoard.UI
                     if (shouldInsertHere)
                     {
                         OnLogDebug?.Invoke($"🎯 Inserting before tab {tab.index} in row {targetRowIndex}", string.Empty);
-                        lastDropTargetIndex = tab.index;
+                        _lastDropTargetIndex = tab.index;
                         return tab.index;
                     }
                 }
@@ -402,29 +408,29 @@ namespace SnipShottyBoard.UI
                 var lastTabInRow = targetRow[targetRow.Count - 1];
                 int insertIndex = lastTabInRow.index + 1;
                 OnLogDebug?.Invoke($"🎯 Inserting after last tab in row {targetRowIndex}: index {insertIndex}", string.Empty);
-                lastDropTargetIndex = insertIndex;
+                _lastDropTargetIndex = insertIndex;
                 return insertIndex;
             }
             catch (Exception ex)
             {
                 OnLogError?.Invoke("Error finding drop target index", ex);
-                return draggedTabOriginalIndex; // Default to original position
+                return _draggedTabOriginalIndex; // Default to original position
             }
         }
 
-        // ✅ Complete drag operation and reorder tabs
+        // ✅ Complete drag operation and reorder _tabs
         private void CompleteDragOperation(bool performReorder = true)
         {
             try
             {
                 OnLogDebug?.Invoke("🎯 Completing drag operation", string.Empty);
                 
-                if (performReorder && dropTargetIndex >= 0 && 
-                    dropTargetIndex != draggedTabOriginalIndex)
+                if (performReorder && _dropTargetIndex >= 0 && 
+                    _dropTargetIndex != _draggedTabOriginalIndex)
                 {
                     // 🔄 Perform the actual reordering
-                    ReorderTab(draggedTabOriginalIndex, dropTargetIndex);
-                    OnLogDebug?.Invoke($"✅ Tab reordered from {draggedTabOriginalIndex} to {dropTargetIndex}", string.Empty);
+                    ReorderTab(_draggedTabOriginalIndex, _dropTargetIndex);
+                    OnLogDebug?.Invoke($"✅ Tab reordered from {_draggedTabOriginalIndex} to {_dropTargetIndex}", string.Empty);
                 }
                 
                 // 🧹 Cleanup drag operation
@@ -445,30 +451,30 @@ namespace SnipShottyBoard.UI
             try
             {
                 // 🖱️ Release mouse capture
-                if (draggedTab != null)
+                if (_draggedTab != null)
                 {
-                    draggedTab.ReleaseMouseCapture();
+                    _draggedTab.ReleaseMouseCapture();
                 }
                 
                 // 🎨 Remove drag visual
-                if (dragVisual != null && dragCanvas != null)
+                if (_dragVisual != null && _dragCanvas != null)
                 {
-                    dragCanvas.Children.Remove(dragVisual);
-                    dragVisual = null;
+                    _dragCanvas.Children.Remove(_dragVisual);
+                    _dragVisual = null;
                 }
                 
                 // 📍 Hide drop indicator
-                if (dropIndicator != null)
+                if (_dropIndicator != null)
                 {
-                    dropIndicator.Visibility = Visibility.Hidden;
+                    _dropIndicator.Visibility = Visibility.Hidden;
                 }
                 
                 // 🔄 Reset drag state
-                isDragging = false;
-                draggedTab = null;
-                draggedTabOriginalIndex = -1;
-                dropTargetIndex = -1;
-                lastDropTargetIndex = -1;
+                _isDragging = false;
+                _draggedTab = null;
+                _draggedTabOriginalIndex = -1;
+                _dropTargetIndex = -1;
+                _lastDropTargetIndex = -1;
                 
                 OnLogDebug?.Invoke("🧹 Drag operation cleaned up", string.Empty);
             }
@@ -483,22 +489,22 @@ namespace SnipShottyBoard.UI
         {
             try
             {
-                if (fromIndex < 0 || fromIndex >= tabs.Count || 
-                    toIndex < 0 || toIndex > tabs.Count) return;
+                if (fromIndex < 0 || fromIndex >= _tabs.Count || 
+                    toIndex < 0 || toIndex > _tabs.Count) return;
                 
                 // 📝 Store the tab being moved
-                var movingTab = tabs[fromIndex];
+                var movingTab = _tabs[fromIndex];
                 
                 // 🗂️ Remove from collections
-                tabs.RemoveAt(fromIndex);
-                tabHeaderPanel.Children.RemoveAt(fromIndex);
+                _tabs.RemoveAt(fromIndex);
+                _tabHeaderPanel.Children.RemoveAt(fromIndex);
                 
                 // 📌 Insert at new position
                 var insertIndex = toIndex > fromIndex ? toIndex - 1 : toIndex;
-                insertIndex = Math.Max(0, Math.Min(insertIndex, tabs.Count));
+                insertIndex = Math.Max(0, Math.Min(insertIndex, _tabs.Count));
                 
-                tabs.Insert(insertIndex, movingTab);
-                tabHeaderPanel.Children.Insert(insertIndex, movingTab.HeaderButton);
+                _tabs.Insert(insertIndex, movingTab);
+                _tabHeaderPanel.Children.Insert(insertIndex, movingTab.HeaderButton);
                 
                 // 💾 Mark as changed
                 OnDataChanged?.Invoke(true);
@@ -515,9 +521,9 @@ namespace SnipShottyBoard.UI
         // 🔍 Helper method to get tab index from button
         private int GetTabIndex(Button tabButton)
         {
-            for (int i = 0; i < tabs.Count; i++)
+            for (int i = 0; i < _tabs.Count; i++)
             {
-                if (tabs[i].HeaderButton == tabButton)
+                if (_tabs[i].HeaderButton == tabButton)
                     return i;
             }
             return -1;
@@ -526,7 +532,7 @@ namespace SnipShottyBoard.UI
         // 📝 Helper method to get tab title from button
         private string GetTabTitle(Button tabButton)
         {
-            var tab = tabs.FirstOrDefault(t => t.HeaderButton == tabButton);
+            var tab = _tabs.FirstOrDefault(t => t.HeaderButton == tabButton);
             return tab?.Title ?? "Tab";
         }
         #endregion
@@ -535,11 +541,21 @@ namespace SnipShottyBoard.UI
         // 📝 Creates a new tab
         public void CreateNewTab()
         {
+            if (_appSettings != null && _tabs.Count >= _appSettings.MaxTabs)
+            {
+                CustomDialog.ShowInformation(
+                    Application.Current.MainWindow,
+                    $"Maximum of {_appSettings.MaxTabs} _tabs reached.\n\nClose a tab before creating a new one.",
+                    "Tab Limit Reached",
+                    "📋");
+                return;
+            }
+
             try
             {
                 OnLogDebug?.Invoke("🆕 Starting CreateNewTab", string.Empty);
                 
-                int tabCount = tabs.Count + 1;
+                int tabCount = _tabs.Count + 1;
                 var noteTab = new NoteTab();
                 var tabTitle = $"Note {tabCount}";
 
@@ -605,12 +621,12 @@ namespace SnipShottyBoard.UI
 
                 OnLogDebug?.Invoke("✅ Click handler wired", string.Empty);
 
-                // 📐 Apply default splitter ratio after layout is ready (new tabs use default)
+                // 📐 Apply default splitter ratio after layout is ready (new _tabs use default)
                 noteTab.Dispatcher.BeginInvoke(new Action(() =>
                 {
                     try
                     {
-                        double defaultRatio = appSettings?.SplitterTextMediaRatio ?? AppConstants.SplitterDefaultRatio;
+                        double defaultRatio = _appSettings?.SplitterTextMediaRatio ?? AppConstants.SplitterDefaultRatio;
                         noteTab.ApplySplitterRatio(defaultRatio);
                         OnLogDebug?.Invoke($"📐 Applied default splitter ratio to new tab: {defaultRatio:F2}", string.Empty);
                     }
@@ -634,8 +650,8 @@ namespace SnipShottyBoard.UI
                 }), System.Windows.Threading.DispatcherPriority.Loaded);
 
                 // 📍 Add to collections
-                tabs.Add(customTab);
-                tabHeaderPanel.Children.Add(customTab.HeaderButton);
+                _tabs.Add(customTab);
+                _tabHeaderPanel.Children.Add(customTab.HeaderButton);
 
                 OnLogDebug?.Invoke("✅ Added to collections", string.Empty);
 
@@ -672,12 +688,12 @@ namespace SnipShottyBoard.UI
             }
             
             // 🧠 Skip if already selected (avoid redundant updates)
-            if (selectedTab == tab) return;
+            if (_selectedTab == tab) return;
             
-            var previousTab = selectedTab;
-            selectedTab = tab;
+            var previousTab = _selectedTab;
+            _selectedTab = tab;
 
-            // 🎨 Only update the tabs that changed
+            // 🎨 Only update the _tabs that changed
             if (previousTab != null)
             {
                 UpdateTabSelection(previousTab, false); // Deselect old tab
@@ -685,7 +701,7 @@ namespace SnipShottyBoard.UI
             UpdateTabSelection(tab, true); // Select new tab
 
             // 🎬 Update content (without animation)
-            tabContentArea.Content = tab.Content;
+            _tabContentArea.Content = tab.Content;
             
             // 📊 Update status bar
             OnStatusUpdateRequested?.Invoke();
@@ -694,26 +710,26 @@ namespace SnipShottyBoard.UI
         // ❌ Delete the currently selected tab
         public void DeleteCurrentTab()
         {
-            if (selectedTab == null) return;
+            if (_selectedTab == null) return;
 
             // 🔔 Check settings first - if ConfirmTabDeletion is false, delete immediately
-            if (appSettings != null && !appSettings.ConfirmTabDeletion)
+            if (_appSettings != null && !_appSettings.ConfirmTabDeletion)
             {
-                DeleteTab(selectedTab);
+                DeleteTab(_selectedTab);
                 return;
             }
 
             // 🔔 Check if user previously chose "don't ask again"
-            if (skipDeleteConfirmation)
+            if (_skipDeleteConfirmation)
             {
-                DeleteTab(selectedTab);
+                DeleteTab(_selectedTab);
                 return;
             }
 
             // 🎭 Show custom confirmation dialog
             var (confirmed, dontAskAgain) = CustomDialog.ShowDeleteConfirmation(
                 Application.Current.MainWindow,
-                selectedTab.Title,
+                _selectedTab.Title,
                 showDontAskAgain: true);
 
             if (!confirmed) return;
@@ -721,34 +737,34 @@ namespace SnipShottyBoard.UI
             // 💭 Remember user preference if they checked "don't ask again"
             if (dontAskAgain)
             {
-                skipDeleteConfirmation = true;
+                _skipDeleteConfirmation = true;
                 // 📝 Also update the settings to reflect this choice
-                if (appSettings != null)
+                if (_appSettings != null)
                 {
-                    appSettings.ConfirmTabDeletion = false;
+                    _appSettings.ConfirmTabDeletion = false;
                     OnSettingsNeedUpdate?.Invoke(); // Notify that settings need to be saved
                 }
                 OnLogDebug?.Invoke("🔕 Delete confirmation disabled by user preference and settings updated", string.Empty);
             }
 
-            DeleteTab(selectedTab);
+            DeleteTab(_selectedTab);
         }
 
         // 🗑️ Delete a specific tab
         public void DeleteSpecificTab(Button tabButton)
         {
-            var tabToDelete = tabs.FirstOrDefault(t => t.HeaderButton == tabButton);
+            var tabToDelete = _tabs.FirstOrDefault(t => t.HeaderButton == tabButton);
             if (tabToDelete == null) return;
 
             // 🔔 Check settings first - if ConfirmTabDeletion is false, delete immediately
-            if (appSettings != null && !appSettings.ConfirmTabDeletion)
+            if (_appSettings != null && !_appSettings.ConfirmTabDeletion)
             {
                 DeleteTab(tabToDelete);
                 return;
             }
 
             // 🔔 Check if user previously chose "don't ask again"
-            if (skipDeleteConfirmation)
+            if (_skipDeleteConfirmation)
             {
                 DeleteTab(tabToDelete);
                 return;
@@ -765,11 +781,11 @@ namespace SnipShottyBoard.UI
             // 💭 Remember user preference if they checked "don't ask again"
             if (dontAskAgain)
             {
-                skipDeleteConfirmation = true;
+                _skipDeleteConfirmation = true;
                 // 📝 Also update the settings to reflect this choice
-                if (appSettings != null)
+                if (_appSettings != null)
                 {
-                    appSettings.ConfirmTabDeletion = false;
+                    _appSettings.ConfirmTabDeletion = false;
                     OnSettingsNeedUpdate?.Invoke(); // Notify that settings need to be saved
                 }
                 OnLogDebug?.Invoke("🔕 Delete confirmation disabled by user preference and settings updated", string.Empty);
@@ -804,10 +820,10 @@ namespace SnipShottyBoard.UI
             try
             {
                 editBox.Background = Brushes.Transparent;
-                editBox.SetResourceReference(TextBox.ForegroundProperty, "AppForegroundBrush");
+                editBox.SetResourceReference(TextBox.ForegroundProperty, ResourceKeys.AppForegroundBrush);
                 editBox.BorderThickness = new Thickness(0);
                 editBox.BorderBrush = Brushes.Transparent;
-                editBox.CaretBrush = (Brush)Application.Current.FindResource("AccentBrush");
+                editBox.CaretBrush = (Brush)Application.Current.FindResource(ResourceKeys.AccentBrush);
                 editBox.Padding = new Thickness(0);
                 editBox.Margin = textBlock.Margin;
             }
@@ -821,7 +837,7 @@ namespace SnipShottyBoard.UI
             }
 
             // Find the button that contains this TextBlock
-            var tabButton = tabs.FirstOrDefault(t => t.HeaderButton.Content == textBlock)?.HeaderButton;
+            var tabButton = _tabs.FirstOrDefault(t => t.HeaderButton.Content == textBlock)?.HeaderButton;
             if (tabButton == null) return;
 
             // 🎯 Store original tab appearance for restoration
@@ -837,8 +853,8 @@ namespace SnipShottyBoard.UI
 
             try
             {
-                var accentBrush = (Brush)Application.Current.FindResource("AccentBrush");
-                var glowEffect = Application.Current.FindResource("AccentGlowEffect") as System.Windows.Media.Effects.Effect;
+                var accentBrush = (Brush)Application.Current.FindResource(ResourceKeys.AccentBrush);
+                var glowEffect = Application.Current.FindResource(ResourceKeys.AccentGlowEffect) as System.Windows.Media.Effects.Effect;
 
                 // Accent-tinted background on tab surface
                 tabBorder!.Background = new SolidColorBrush(Color.FromArgb(30, 99, 102, 241)); // 12% indigo
@@ -878,7 +894,7 @@ namespace SnipShottyBoard.UI
                 RestoreTabAppearance();
 
                 // Update tab title in our collection
-                var tab = tabs.FirstOrDefault(t => t.HeaderButton == tabButton);
+                var tab = _tabs.FirstOrDefault(t => t.HeaderButton == tabButton);
                 if (tab != null)
                 {
                     tab.Title = newName;
@@ -908,10 +924,10 @@ namespace SnipShottyBoard.UI
                     tabButton.Effect = originalEffect;
 
                     // Force refresh of tab selection state
-                    var currentTab = tabs.FirstOrDefault(t => t.HeaderButton == tabButton);
+                    var currentTab = _tabs.FirstOrDefault(t => t.HeaderButton == tabButton);
                     if (currentTab != null)
                     {
-                        UpdateTabSelection(currentTab, currentTab == selectedTab);
+                        UpdateTabSelection(currentTab, currentTab == _selectedTab);
                     }
                 }
                 catch
@@ -962,7 +978,7 @@ namespace SnipShottyBoard.UI
         // 📋 Duplicate the specified tab
         public void DuplicateTab(Button sourceTabButton)
         {
-            var sourceTab = tabs.FirstOrDefault(t => t.HeaderButton == sourceTabButton);
+            var sourceTab = _tabs.FirstOrDefault(t => t.HeaderButton == sourceTabButton);
             if (sourceTab == null) return;
 
             // 🧠 Create new tab with copied content
@@ -972,7 +988,7 @@ namespace SnipShottyBoard.UI
             // 🔔 Wire up change tracking for auto-save
             newNoteTab.OnDataChanged += () => OnDataChanged?.Invoke(true);
 
-            // 📐 Wire up splitter ratio persistence for duplicated tabs (per-tab)
+            // 📐 Wire up splitter ratio persistence for duplicated _tabs (per-tab)
             newNoteTab.OnSplitterRatioChanged += (ratio) =>
             {
                 try
@@ -1004,8 +1020,8 @@ namespace SnipShottyBoard.UI
             duplicateTab.HeaderButton.Click += (s, e) => SelectTab(duplicateTab);
 
             // 📍 Add to collections and select the new tab
-            tabs.Add(duplicateTab);
-            tabHeaderPanel.Children.Add(duplicateTab.HeaderButton);
+            _tabs.Add(duplicateTab);
+            _tabHeaderPanel.Children.Add(duplicateTab.HeaderButton);
             SelectTab(duplicateTab);
 
             // 📐 Copy source tab's splitter ratio to duplicated tab
@@ -1029,10 +1045,10 @@ namespace SnipShottyBoard.UI
         // 🎯 Start renaming the currently selected tab
         public void StartRenameCurrentTab()
         {
-            if (selectedTab != null)
+            if (_selectedTab != null)
             {
                 // Find the TextBlock within the tab button
-                if (selectedTab.HeaderButton.Content is TextBlock textBlock)
+                if (_selectedTab.HeaderButton.Content is TextBlock textBlock)
                 {
                     RenameTab(textBlock);
                 }
@@ -1042,25 +1058,25 @@ namespace SnipShottyBoard.UI
         // 🔄 Switch to the next tab
         public void SwitchToNextTab()
         {
-            if (tabs.Count <= 1) return; // No point switching if only one tab
+            if (_tabs.Count <= 1) return; // No point switching if only one tab
 
-            var currentIndex = selectedTab != null ? tabs.IndexOf(selectedTab) : -1;
-            var nextIndex = (currentIndex + 1) % tabs.Count; // Wrap around to first tab
+            var currentIndex = _selectedTab != null ? _tabs.IndexOf(_selectedTab) : -1;
+            var nextIndex = (currentIndex + 1) % _tabs.Count; // Wrap around to first tab
             
-            if (nextIndex >= 0 && nextIndex < tabs.Count)
+            if (nextIndex >= 0 && nextIndex < _tabs.Count)
             {
-                SelectTab(tabs[nextIndex]);
+                SelectTab(_tabs[nextIndex]);
             }
         }
 
-        // 🎯 Navigate tabs using arrow keys (row-aware for multi-row layout)
+        // 🎯 Navigate _tabs using arrow keys (row-aware for multi-row layout)
         public void NavigateTab(string direction)
         {
             try
             {
-                if (tabs.Count == 0) return;
+                if (_tabs.Count == 0) return;
 
-                var currentIndex = selectedTab != null ? tabs.IndexOf(selectedTab) : -1;
+                var currentIndex = _selectedTab != null ? _tabs.IndexOf(_selectedTab) : -1;
                 if (currentIndex < 0) return;
 
                 OnLogDebug?.Invoke($"🎯 NavigateTab: direction={direction}, currentIndex={currentIndex}", string.Empty);
@@ -1068,13 +1084,13 @@ namespace SnipShottyBoard.UI
                 // Handle simple Home/End cases
                 if (direction == "Home")
                 {
-                    SelectTab(tabs[0]);
+                    SelectTab(_tabs[0]);
                     OnLogDebug?.Invoke("🎯 Navigated to first tab (Home)", string.Empty);
                     return;
                 }
                 else if (direction == "End")
                 {
-                    SelectTab(tabs[tabs.Count - 1]);
+                    SelectTab(_tabs[_tabs.Count - 1]);
                     OnLogDebug?.Invoke("🎯 Navigated to last tab (End)", string.Empty);
                     return;
                 }
@@ -1082,13 +1098,13 @@ namespace SnipShottyBoard.UI
                 // 📊 Build row/column layout for arrow key navigation
                 var tabPositions = new List<(int index, Button button, Point position, double rowY)>();
                 
-                for (int i = 0; i < tabs.Count; i++)
+                for (int i = 0; i < _tabs.Count; i++)
                 {
-                    if (tabs[i].HeaderButton != null && tabHeaderPanel != null)
+                    if (_tabs[i].HeaderButton != null && _tabHeaderPanel != null)
                     {
-                        var tabPosition = tabs[i].HeaderButton.TransformToAncestor(tabHeaderPanel).Transform(new Point(0, 0));
+                        var tabPosition = _tabs[i].HeaderButton.TransformToAncestor(_tabHeaderPanel).Transform(new Point(0, 0));
                         double rowY = Math.Round(tabPosition.Y / AppConstants.TabRowGroupingTolerance) * AppConstants.TabRowGroupingTolerance;
-                        tabPositions.Add((i, tabs[i].HeaderButton, tabPosition, rowY));
+                        tabPositions.Add((i, _tabs[i].HeaderButton, tabPosition, rowY));
                     }
                 }
 
@@ -1211,9 +1227,9 @@ namespace SnipShottyBoard.UI
                         break;
                 }
 
-                if (targetIndex != currentIndex && targetIndex >= 0 && targetIndex < tabs.Count)
+                if (targetIndex != currentIndex && targetIndex >= 0 && targetIndex < _tabs.Count)
                 {
-                    SelectTab(tabs[targetIndex]);
+                    SelectTab(_tabs[targetIndex]);
                     OnLogDebug?.Invoke($"🎯 Navigated to tab {targetIndex} ({direction})", string.Empty);
                 }
             }
@@ -1223,14 +1239,14 @@ namespace SnipShottyBoard.UI
             }
         }
 
-        // 📖 Load tabs from saved data
+        // 📖 Load _tabs from saved data
         public void LoadTabs(List<SavedNote> savedNotes)
         {
             try
             {
-                // Clear existing tabs
-                tabs.Clear();
-                tabHeaderPanel.Children.Clear();
+                // Clear existing _tabs
+                _tabs.Clear();
+                _tabHeaderPanel.Children.Clear();
 
                 if (savedNotes?.Any() == true)
                 {
@@ -1258,7 +1274,7 @@ namespace SnipShottyBoard.UI
                             OnStatusUpdateRequested?.Invoke();
                         };
 
-                        // 📐 Wire up splitter ratio persistence for loaded tabs (per-tab)
+                        // 📐 Wire up splitter ratio persistence for loaded _tabs (per-tab)
                         noteTab.OnSplitterRatioChanged += (ratio) =>
                         {
                             try
@@ -1282,8 +1298,8 @@ namespace SnipShottyBoard.UI
 
                         // 🔗 Click event is already wired up in CreateTabHeaderButton
 
-                        tabs.Add(customTab);
-                        tabHeaderPanel.Children.Add(customTab.HeaderButton);
+                        _tabs.Add(customTab);
+                        _tabHeaderPanel.Children.Add(customTab.HeaderButton);
 
                         // 📐 Apply this tab's saved splitter ratio after layout is ready
                         noteTab.Dispatcher.BeginInvoke(new Action(() =>
@@ -1302,9 +1318,9 @@ namespace SnipShottyBoard.UI
                     }
 
                     // Select the first tab
-                    if (tabs.Any())
+                    if (_tabs.Any())
                     {
-                        SelectTab(tabs.First());
+                        SelectTab(_tabs.First());
                     }
                 }
                 else
@@ -1315,7 +1331,7 @@ namespace SnipShottyBoard.UI
             }
             catch (Exception ex)
             {
-                OnLogError?.Invoke("Error loading tabs", ex);
+                OnLogError?.Invoke("Error loading _tabs", ex);
                 // Do NOT create a blank tab here — that would cause autosave to overwrite real notes.
                 // Rethrow so the caller can decide how to handle the failure safely.
                 throw;
@@ -1323,24 +1339,29 @@ namespace SnipShottyBoard.UI
         }
 
         // 💾 Get data for saving
+        // 🐛 BUG-LABELSIZE FIX (2026-06-03): explicitly carry DataVersion + TabOrder
+        // through GetSaveData. Previously these fell back to defaults (1 and 0) on
+        // every save, so the schema migration ran on every load forever.
         public List<SavedNote> GetSaveData()
         {
-            return tabs.Select(tab => new SavedNote
+            return _tabs.Select((tab, index) => new SavedNote
             {
+                DataVersion = SnipShottyBoard.Core.Schema.MigrationService.CurrentNoteSchemaVersion,
                 Title = tab.Title,
                 TextContent = tab.Content.TextContent,
                 RichTextContent = tab.Content.RichTextContent,
                 Media = tab.Content.MediaReferences,
-                SplitterTextMediaRatio = tab.Content.GetStoredSplitterRatio() // Per-tab splitter position
+                SplitterTextMediaRatio = tab.Content.GetStoredSplitterRatio(), // Per-tab splitter position
+                TabOrder = index
             }).ToList();
         }
 
         // 🎨 Refresh all tab visuals (useful after theme changes)
         public void RefreshTabVisuals()
         {
-            foreach (var tab in tabs)
+            foreach (var tab in _tabs)
             {
-                UpdateTabSelection(tab, tab == selectedTab);
+                UpdateTabSelection(tab, tab == _selectedTab);
             }
         }
         #endregion
@@ -1356,12 +1377,12 @@ namespace SnipShottyBoard.UI
                 Margin = new Thickness(8, 4, 8, 4),
                 VerticalAlignment = VerticalAlignment.Center
             };
-            textBlock.SetResourceReference(TextBlock.ForegroundProperty, "AppForegroundBrush");
+            textBlock.SetResourceReference(TextBlock.ForegroundProperty, ResourceKeys.AppForegroundBrush);
 
             var tabButton = new Button
             {
                 Content = textBlock,
-                Style = (Style)Application.Current.FindResource("TabButtonStyle"),
+                Style = (Style)Application.Current.FindResource(ResourceKeys.TabButtonStyle),
                 Height = 32,
                 MinWidth = AppConstants.TabMinWidth,
                 MaxWidth = AppConstants.TabMaxWidth,
@@ -1384,7 +1405,7 @@ namespace SnipShottyBoard.UI
 
             tabButton.Click += (s, e) =>
             {
-                var tab = tabs.FirstOrDefault(t => t.HeaderButton == tabButton);
+                var tab = _tabs.FirstOrDefault(t => t.HeaderButton == tabButton);
                 if (tab != null) SelectTab(tab);
             };
 
@@ -1392,7 +1413,7 @@ namespace SnipShottyBoard.UI
             var contextMenu = new ContextMenu();
 
             // Apply native themed context menu style (from F.0 DarkTheme resources)
-            var menuStyle = Application.Current.FindResource("NativeContextMenuStyle") as System.Windows.Style;
+            var menuStyle = Application.Current.FindResource(ResourceKeys.NativeContextMenuStyle) as System.Windows.Style;
             if (menuStyle != null)
             {
                 contextMenu.Style = menuStyle;
@@ -1448,41 +1469,41 @@ namespace SnipShottyBoard.UI
             // 🖱️ Mouse down - potential start of drag
             tabButton.PreviewMouseLeftButtonDown += (sender, e) =>
             {
-                dragStartPoint = e.GetPosition(tabButton);
+                _dragStartPoint = e.GetPosition(tabButton);
                 OnLogDebug?.Invoke("🖱️ Mouse down on tab", string.Empty);
             };
 
             // 🎯 Mouse move - check if we should start dragging
             tabButton.PreviewMouseMove += (sender, e) =>
             {
-                if (e.LeftButton == MouseButtonState.Pressed && !isDragging)
+                if (e.LeftButton == MouseButtonState.Pressed && !_isDragging)
                 {
                     var currentPosition = e.GetPosition(tabButton);
-                    var diff = dragStartPoint - currentPosition;
+                    var diff = _dragStartPoint - currentPosition;
                     
                     // 📏 Check if mouse moved far enough to start drag (prevents accidental drags)
                     if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
                         Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
                     {
-                        StartDragOperation(tabButton, dragStartPoint);
+                        StartDragOperation(tabButton, _dragStartPoint);
                     }
                 }
-                else if (isDragging && draggedTab == tabButton)
+                else if (_isDragging && _draggedTab == tabButton)
                 {
                     // 🔄 Update drag visual position
                     var windowPosition = e.GetPosition(Application.Current.MainWindow);
                     UpdateDragVisual(windowPosition);
                     
                     // 🎯 Find drop target and update indicator
-                    dropTargetIndex = FindDropTargetIndex(e.GetPosition(tabHeaderPanel));
-                    UpdateDropIndicator(dropTargetIndex);
+                    _dropTargetIndex = FindDropTargetIndex(e.GetPosition(_tabHeaderPanel));
+                    UpdateDropIndicator(_dropTargetIndex);
                 }
             };
 
             // 🖱️ Mouse up - complete drag operation
             tabButton.PreviewMouseLeftButtonUp += (sender, e) =>
             {
-                if (isDragging && draggedTab == tabButton)
+                if (_isDragging && _draggedTab == tabButton)
                 {
                     CompleteDragOperation(true);
                 }
@@ -1491,7 +1512,7 @@ namespace SnipShottyBoard.UI
             // 🚫 Mouse leave - cancel drag if mouse leaves the window
             tabButton.MouseLeave += (sender, e) =>
             {
-                if (isDragging && draggedTab == tabButton)
+                if (_isDragging && _draggedTab == tabButton)
                 {
                     // Only cancel if mouse truly left the application area
                     var mousePos = Mouse.GetPosition(Application.Current.MainWindow);
@@ -1517,16 +1538,16 @@ namespace SnipShottyBoard.UI
             }
             
             // 🧠 Remove from collections
-            tabs.Remove(tabToRemove);
-            tabHeaderPanel.Children.Remove(tabToRemove.HeaderButton);
+            _tabs.Remove(tabToRemove);
+            _tabHeaderPanel.Children.Remove(tabToRemove.HeaderButton);
 
             // 🎯 Handle selection after removal
-            if (tabToRemove == selectedTab)
+            if (tabToRemove == _selectedTab)
             {
-                if (tabs.Count > 0)
+                if (_tabs.Count > 0)
                 {
                     // Select the last tab
-                    SelectTab(tabs.Last());
+                    SelectTab(_tabs.Last());
                 }
                 else
                 {
@@ -1550,7 +1571,7 @@ namespace SnipShottyBoard.UI
                 
                 // 🎨 Set background brush (kept for fallback compatibility)
                 var targetBrush = isSelected 
-                    ? (Brush)Application.Current.FindResource("TabBackgroundBrush") 
+                    ? (Brush)Application.Current.FindResource(ResourceKeys.TabBackgroundBrush) 
                     : Brushes.Transparent;
                 
                 tab.HeaderButton.Background = targetBrush;
@@ -1560,12 +1581,12 @@ namespace SnipShottyBoard.UI
                 {
                     try
                     {
-                        textBlock.SetResourceReference(TextBlock.ForegroundProperty, "AppForegroundBrush");
+                        textBlock.SetResourceReference(TextBlock.ForegroundProperty, ResourceKeys.AppForegroundBrush);
                     }
                     catch
                     {
                         // Fallback text color
-                        textBlock.Foreground = (Brush)Application.Current.FindResource("AppForegroundBrush") ?? Brushes.White;
+                        textBlock.Foreground = (Brush)Application.Current.FindResource(ResourceKeys.AppForegroundBrush) ?? Brushes.White;
                     }
                 }
                 
@@ -1575,44 +1596,10 @@ namespace SnipShottyBoard.UI
             {
                 OnLogError?.Invoke($"Failed to update tab selection for {tab.Title}", ex);
                 
-                // Fallback with proper contrast - detect if we're in dark mode
                 if (isSelected)
-                {
-                    try
-                    {
-                        // Try to detect current theme by checking background color
-                        var appBg = (Brush)Application.Current.FindResource("AppBackgroundBrush");
-                        if (appBg is SolidColorBrush solidBrush)
-                        {
-                            var bgColor = solidBrush.Color;
-                            // If background is dark (low luminance), use darker tab color
-                            var isDarkTheme = (bgColor.R + bgColor.G + bgColor.B) < 384; // 128 * 3
-                            
-                            var tabColor = isDarkTheme
-                                ? Color.FromRgb(36, 52, 71)    // Dark blue for dark theme  
-                                : Color.FromRgb(232, 240, 245); // Light blue for light theme
-                                
-                            tab.HeaderButton.Background = new SolidColorBrush(tabColor);
-                            System.Diagnostics.Debug.WriteLine($"🎨 Using fallback color: {tabColor} (Dark theme: {isDarkTheme})");
-                        }
-                        else
-                        {
-                            // Default to subtle gray
-                            tab.HeaderButton.Background = new SolidColorBrush(Color.FromRgb(64, 64, 64));
-                            System.Diagnostics.Debug.WriteLine("🎨 Using default gray fallback");
-                        }
-                    }
-                    catch (Exception ex2)
-                    {
-                        // Final fallback - subtle gray
-                        tab.HeaderButton.Background = new SolidColorBrush(Color.FromRgb(64, 64, 64));
-                        System.Diagnostics.Debug.WriteLine($"🎨 Using final fallback due to: {ex2.Message}");
-                    }
-                }
+                    tab.HeaderButton.Background = (Brush)Application.Current.FindResource(ResourceKeys.TabBackgroundBrush);
                 else
-                {
                     tab.HeaderButton.Background = Brushes.Transparent;
-                }
             }
         }
         #endregion
@@ -1636,15 +1623,15 @@ namespace SnipShottyBoard.UI
                 OnLogError = null;
                 OnSettingsNeedUpdate = null;
 
-                // Clear tabs (Note: Individual tab disposal would require IDisposable on NoteTab - future enhancement)
-                tabs.Clear();
-                tabHeaderPanel?.Children.Clear();
+                // Clear _tabs (Note: Individual tab disposal would require IDisposable on NoteTab - future enhancement)
+                _tabs.Clear();
+                _tabHeaderPanel?.Children.Clear();
 
                 // Clear drag state
-                dragCanvas = null;
-                dragVisual = null;
-                dropIndicator = null;
-                draggedTab = null;
+                _dragCanvas = null;
+                _dragVisual = null;
+                _dropIndicator = null;
+                _draggedTab = null;
 
                 _disposed = true;
             }

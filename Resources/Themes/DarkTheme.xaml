@@ -44,6 +44,13 @@
     <!-- Keep AccentBrush as solid indigo for single-color uses (borders, etc.) -->
     <SolidColorBrush x:Key="AccentBrush" Color="#6366F1" />
 
+    <!-- 🖱️ Drag ghost overlays (semi-transparent) -->
+    <SolidColorBrush x:Key="DragGhostBrush" Color="#8C808080"/>
+    <SolidColorBrush x:Key="DragGhostBorderBrush" Color="#78606060"/>
+
+    <!-- ⚙️ Settings active tab highlight (20% white) -->
+    <SolidColorBrush x:Key="SettingsActiveTabBrush" Color="#33FFFFFF"/>
+
     <!-- 📜 Scrollbar Brushes -->
     <SolidColorBrush x:Key="ScrollBarTrackBrush" Color="{StaticResource ScrollBarTrackColor}" />
     <SolidColorBrush x:Key="ScrollBarThumbBrush" Color="{StaticResource ScrollBarThumbColor}" />

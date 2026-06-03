@@ -10,7 +10,9 @@
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResize"
         ExtendsContentIntoTitleBar="True"
-        WindowBackdropType="None">
+        WindowBackdropType="None"
+        WindowCornerPreference="Round"
+        Background="{DynamicResource AppBackgroundBrush}">
 
     <!-- 📝 Main Content -->
     <Grid>

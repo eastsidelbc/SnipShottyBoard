@@ -8,6 +8,8 @@
         ResizeMode="CanResize"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="None"
+        WindowCornerPreference="Round"
+        Background="{DynamicResource AppBackgroundBrush}"
         WindowStartupLocation="CenterOwner">
 
     <!-- 🎨 Window Resources -->
@@ -81,28 +83,28 @@
                             Content="🏠 General"
                             Click="TabButton_Click"
                             Tag="General"
-                            Style="{StaticResource TabButtonStyle}" />
+                            Style="{DynamicResource TabButtonStyle}" />
 
                     <!-- 🎨 Appearance Tab -->
                     <Button x:Name="AppearanceTabButton"
                             Content="🎨 Appearance"
                             Click="TabButton_Click"
                             Tag="Appearance"
-                            Style="{StaticResource TabButtonStyle}" />
+                            Style="{DynamicResource TabButtonStyle}" />
 
                     <!-- 💻 Window Tab -->
                     <Button x:Name="WindowTabButton"
                             Content="💻 Window"
                             Click="TabButton_Click"
                             Tag="Window"
-                            Style="{StaticResource TabButtonStyle}" />
+                            Style="{DynamicResource TabButtonStyle}" />
 
                     <!-- 📋 Tab Settings Tab -->
                     <Button x:Name="TabSettingsTabButton"
                             Content="📋 Tab Settings"
                             Click="TabButton_Click"
                             Tag="TabSettings"
-                            Style="{StaticResource TabButtonStyle}" />
+                            Style="{DynamicResource TabButtonStyle}" />
 
                 </StackPanel>
             </Border>
@@ -342,19 +344,19 @@
                 <!-- 🔄 Reset Button -->
                 <Button Content="🔄 Reset to Defaults"
                         Click="Reset_Click"
-                        Style="{StaticResource SecondaryButtonStyle}"
+                        Style="{DynamicResource SecondaryButtonStyle}"
                         Margin="0,0,8,0" />
                 
                 <!-- ❌ Cancel Button -->
                 <Button Content="❌ Cancel"
                         Click="Cancel_Click"
-                        Style="{StaticResource SecondaryButtonStyle}"
+                        Style="{DynamicResource SecondaryButtonStyle}"
                         Margin="0,0,8,0" />
                 
                 <!-- ✅ Apply Button -->
                 <Button Content="✅ Apply"
                         Click="Apply_Click"
-                        Style="{StaticResource PrimaryButtonStyle}" />
+                        Style="{DynamicResource PrimaryButtonStyle}" />
             </StackPanel>
         </Border>
 
