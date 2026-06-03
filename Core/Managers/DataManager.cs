@@ -511,6 +511,26 @@ namespace SnipShottyBoard.Core.Managers
         }
 
         /// <summary>
+        /// Path-jail guard. Throws <see cref="InvalidOperationException"/> if
+        /// <paramref name="path"/> resolves to any location outside <see cref="ImagesFolder"/>.
+        /// Logs a Security-level error before throwing so the attempt is always recorded.
+        /// </summary>
+        private static void AssertInsideImagesFolder(string path)
+        {
+            var jail = ImagesFolder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                       + Path.DirectorySeparatorChar;
+            var resolved = Path.GetFullPath(path);
+            if (!resolved.StartsWith(jail, StringComparison.OrdinalIgnoreCase))
+            {
+                LoggingService.LogErrorStatic(
+                    $"Path jail violation: '{PathSanitizer.SanitizePath(path)}' is outside the images folder",
+                    null, "Security");
+                throw new InvalidOperationException(
+                    "File operation refused: path resolves outside the images folder.");
+            }
+        }
+
+        /// <summary>
         /// 📁 Save image from clipboard to managed images folder
         /// </summary>
         /// <param name="imageSource">WPF ImageSource from clipboard</param>
@@ -574,13 +594,19 @@ namespace SnipShottyBoard.Core.Managers
                 // 📂 Generate timestamped filename
                 var fileName = Path.GetFileName(sourcePath);
                 var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
-                var extension = Path.GetExtension(fileName);
                 var newFileName = $"dropped_{timestamp}_{fileName}";
                 var destinationPath = Path.Combine(ImagesFolder, newFileName);
+
+                // Confirm destination stays inside the vault before writing.
+                AssertInsideImagesFolder(destinationPath);
 
                 // 📋 Copy the file
                 File.Copy(sourcePath, destinationPath, true);
                 return destinationPath;
+            }
+            catch (InvalidOperationException)
+            {
+                return null; // path jail violation — already logged in AssertInsideImagesFolder
             }
             catch (Exception ex)
             {
@@ -600,6 +626,8 @@ namespace SnipShottyBoard.Core.Managers
         {
             try
             {
+                AssertInsideImagesFolder(imagePath);
+
                 if (File.Exists(imagePath))
                 {
                     File.Delete(imagePath);
@@ -608,6 +636,10 @@ namespace SnipShottyBoard.Core.Managers
                     });
                 }
                 return true;
+            }
+            catch (InvalidOperationException)
+            {
+                return false; // path jail violation — already logged in AssertInsideImagesFolder
             }
             catch (Exception ex)
             {

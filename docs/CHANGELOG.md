@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.2] – 2026-06-03
+
+### 🛡️ Security
+- **Path traversal hardening — MediaReference**: `FullPath` getter now calls `Path.GetFullPath()` and asserts the resolved path starts inside `%AppData%\SnipShottyBoard\images\` before returning. A tampered `master.json` with a `..`-traversal filename can no longer cause file operations outside the images vault.
+- **Path traversal hardening — DataManager**: Added `AssertInsideImagesFolder()` path-jail guard. `DeleteImage()` and `CopyDroppedImage()` now call this guard before any file operation. Violations are logged at Security level and the operation is refused. ([Security Audit 2026-06-03])
+
 ## [1.7.1] – 2026-06-03
 
 ### 🔒 Fixed

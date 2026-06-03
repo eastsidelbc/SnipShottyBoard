@@ -58,9 +58,27 @@ namespace SnipShottyBoard.Core.Models
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "SnipShottyBoard", "images");
 
+        // Normalized with trailing separator so StartsWith cannot be fooled by sibling folders
+        // (e.g. "SnipShottyBoard\imagesfoo\evil.png" would not match).
+        private static readonly string _imagesFolderJail =
+            _imagesFolder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+
         /// <summary>
         /// Resolves the full path to the media file.
+        /// Throws <see cref="InvalidOperationException"/> if <see cref="Filename"/> resolves
+        /// outside the images folder (path traversal guard).
         /// </summary>
-        public string FullPath => Path.Combine(_imagesFolder, Filename);
+        public string FullPath
+        {
+            get
+            {
+                var resolved = Path.GetFullPath(Path.Combine(_imagesFolder, Filename));
+                if (!resolved.StartsWith(_imagesFolderJail, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException(
+                        $"MediaReference '{Filename}' resolves outside the images folder — possible path traversal.");
+                return resolved;
+            }
+        }
     }
 }
